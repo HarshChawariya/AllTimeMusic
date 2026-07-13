@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/dialog_bg_rounded"
+    android:orientation="vertical"
+    android:padding="20dp">
+
+    <View
+        android:layout_width="40dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginBottom="20dp"
+        android:background="#4DFFFFFF" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Add Lyrics"
+        android:textColor="@color/white"
+        android:textSize="22sp"
+        android:fontFamily="sans-serif-black"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="Paste plain text or LRC format [00:12.34] for synced mode."
+        android:textColor="#B3FFFFFF"
+        android:textSize="12sp" />
+
+    <EditText
+        android:id="@+id/lyrics_input"
+        android:layout_width="match_parent"
+        android:layout_height="250dp"
+        android:layout_marginTop="16dp"
+        android:background="@drawable/round_back_white10_100"
+        android:gravity="top"
+        android:hint="Paste lyrics here..."
+        android:inputType="textMultiLine"
+        android:padding="12dp"
+        android:textColor="@color/white"
+        android:textColorHint="#66FFFFFF"
+        android:textSize="14sp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/btn_cancel_lyrics"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Cancel"
+            android:textColor="@color/white" />
+
+        <Button
+            android:id="@+id/btn_save_lyrics"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:layout_weight="1"
+            android:backgroundTint="#9D201A"
+            android:text="Save Lyrics"
+            android:textColor="@color/white"
+            app:cornerRadius="8dp" />
+    </LinearLayout>
+
+</LinearLayout>

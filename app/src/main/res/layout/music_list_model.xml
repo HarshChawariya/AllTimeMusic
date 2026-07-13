@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_marginBottom="10dp"
+    android:padding="8dp"
+    android:background="@android:color/transparent"
+    android:gravity="center_vertical">
+
+    <TextView
+        android:id="@+id/alphabet1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentTop="true"
+        android:layout_marginBottom="10dp"
+        android:paddingStart="10dp"
+        android:paddingEnd="10dp"
+        android:textColor="@color/white"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+<LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:layout_below="@id/alphabet1">
+
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <LinearLayout
+            android:id="@+id/RL_LinLayout"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
+            android:layout_alignParentStart="true"
+            android:layout_marginEnd="10dp"
+            android:background="@drawable/rec_drw_min_profile_bg">
+
+            <com.google.android.material.imageview.ShapeableImageView
+                android:id="@+id/RL_profile_img"
+                android:layout_width="60dp"
+                android:layout_height="60dp"
+                android:src="@drawable/profile"
+                app:shapeAppearanceOverlay="@style/recyclerRoundedImageView"
+                android:scaleType="centerCrop"/>
+
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/songTitle"
+            android:layout_width="300dp"
+            android:layout_height="wrap_content"
+            android:layout_toEndOf="@+id/RL_LinLayout"
+            android:layout_marginTop="8dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="Song Title"
+            android:textColor="@color/white"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <ImageView
+            android:id="@+id/phone_android_24"
+            android:layout_width="19dp"
+            android:layout_height="19dp"
+            android:padding="4dp"
+            android:src="@drawable/phone_android_24"
+            android:layout_toEndOf="@+id/RL_LinLayout"
+            android:layout_below="@id/songTitle"/>
+
+        <TextView
+            android:id="@+id/artistNameList"
+            android:layout_width="262dp"
+            android:layout_height="wrap_content"
+            android:layout_toEndOf="@+id/phone_android_24"
+            android:layout_below="@id/songTitle"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="Artist Name"
+            android:textColor="#C1BDBD"
+            android:textSize="14sp"/>
+
+        <ImageView
+            android:id="@+id/recycler_fav_heart"
+            android:layout_width="19dp"
+            android:layout_height="19dp"
+            android:padding="2dp"
+            android:layout_toEndOf="@id/artistNameList"
+            android:src="@drawable/boder_of_heart"
+            app:tint="#C1BDBD"
+            android:layout_below="@id/songTitle"/>
+
+        <ImageView
+            android:id="@+id/recycler_three_dot"
+            android:layout_width="30dp"
+            android:layout_height="60dp"
+            android:layout_toEndOf="@+id/songTitle"
+            android:src="@drawable/three_dot"/>
+    </RelativeLayout>
+</LinearLayout>
+    <TextView
+        android:id="@+id/alphabet2"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:visibility="gone" />
+
+</RelativeLayout>

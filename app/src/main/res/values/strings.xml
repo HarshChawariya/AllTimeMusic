@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">All Time Music</string>
+    <string name="radhe_radhe">Radhe Radhe</string>
+    <string name="logo">For Song Banner</string>
+    <string name="img_btn">For control music</string>
+    <string name="txt_Hint">Lyrics</string>
+    <string name="time_text">0</string>
+    <!-- TODO: Remove or change this placeholder text -->
+    <string name="hello_blank_fragment">Hello blank fragment</string>
+    <string name="searching_for_lyrics">Searching for lyrics...</string>
+    <string name="unknown_artist_name">Unknown Artist Name</string>
+    <string name="lyrics_will_be_appearing">Lyrics will be appearing....</string>
+    <string name="radhakrishna">RadhaKrishna</string>
+    <string name="options_menu">options menu</string>
+</resources>

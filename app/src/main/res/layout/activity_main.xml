@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/rec_draw"
+    tools:context=".MainActivity">
+
+    <!-- Bottom Layer: Song List -->
+    <LinearLayout
+        android:id="@+id/mainLayOut"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:visibility="visible">
+
+        <TextView
+            android:id="@+id/alphabet"
+            android:layout_width="match_parent"
+            android:layout_height="25dp"
+            android:layout_marginStart="25dp"
+            android:layout_marginEnd="25dp"
+            android:text=""
+            android:textColor="@color/white"/>
+
+        <!-- RecyclerView should not be inside a ScrollView for better performance -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recycler"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:overScrollMode="never" />
+
+        <include
+            android:id="@+id/miniPlayer"
+            layout="@layout/dialog_res"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <!-- Top Layer: Player / Custom TabLayout -->
+    <LinearLayout
+        android:id="@+id/fragment_contained_linLayout"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:background="@drawable/rec_draw"
+        android:visibility="gone"
+        android:clickable="true"
+        android:focusable="true">
+
+        <LinearLayout
+            android:id="@+id/tabLay_LinearLayout"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            android:gravity="center_vertical"
+            android:background="#9D201A">
+
+            <ImageView
+                android:id="@+id/img_back_arrow"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:src="@drawable/arrow_back_ios_new_24"
+                android:rotation="-90"
+                android:layout_marginEnd="90dp"
+                android:layout_marginStart="18dp" />
+
+            <FrameLayout
+                android:layout_width="150dp"
+                android:layout_height="30dp"
+                android:layout_margin="5dp"
+                android:background="@drawable/round_back_white10_100">
+
+                <View
+                    android:id="@+id/indicator"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:background="@drawable/round_back_white_100" />
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:orientation="horizontal"
+                    android:weightSum="2">
+
+                    <TextView
+                        android:id="@+id/tabItem1"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:text="PlayList"
+                        android:gravity="center"
+                        android:textStyle="bold"
+                        android:textColor="#FFFFFF"
+                        android:background="@android:color/transparent"/>
+
+                    <TextView
+                        android:id="@+id/tabItem2"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:text="Lyrics"
+                        android:gravity="center"
+                        android:textColor="#99FFFFFF"
+                        android:background="@android:color/transparent"/>
+                </LinearLayout>
+            </FrameLayout>
+            <ImageView
+                android:id="@+id/img_three_dot"
+                android:layout_marginStart="80dp"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:src="@drawable/three_dot"
+                android:layout_gravity="center_vertical"
+                android:contentDescription="@string/options_menu" />
+        </LinearLayout>
+
+        <androidx.viewpager2.widget.ViewPager2
+            android:id="@+id/viewPager"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:overScrollMode="never" />
+    </LinearLayout>
+
+</FrameLayout>

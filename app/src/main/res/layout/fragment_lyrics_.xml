@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#9D201A"
+    android:orientation="vertical"
+    tools:context=".Lyrics_Fragment">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:weightSum="2">
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="25dp"
+            android:id="@+id/song_name_txt"
+            android:textSize="17sp"
+            android:text="@string/radhakrishna"
+            android:gravity="center"
+            android:layout_gravity="center_horizontal"
+            android:textColor="@color/white"
+            android:layout_weight="1"
+            android:marqueeRepeatLimit="marquee_forever"
+            android:ellipsize="marquee"
+            android:fadingEdge="horizontal"
+            android:textStyle="bold"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="20dp"
+            android:id="@+id/artist_txt"
+            android:textSize="14sp"
+            android:layout_weight="1"
+            android:text="@string/unknown_artist_name"
+            android:gravity="center"
+            android:layout_gravity="center_horizontal"
+            android:textColor="@color/white"
+            android:textStyle="bold"/>
+    </LinearLayout>
+
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/lyrics_recycler"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:overScrollMode="never"
+            android:scrollbars="none"
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp"
+            android:paddingTop="150dp"
+            android:paddingBottom="300dp"
+            android:clipToPadding="false"/>
+
+        <ScrollView
+            android:id="@+id/plain_lyrics_scroll"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone"
+            android:overScrollMode="never"
+            android:scrollbars="none"
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp"
+            android:paddingTop="50dp"
+            android:paddingBottom="150dp"
+            android:clipToPadding="false">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:id="@+id/lyrics_txt"
+                android:gravity="center_horizontal"
+                android:lineSpacingExtra="10dp"
+                android:textSize="26sp"
+                android:text="@string/lyrics_will_be_appearing"
+                android:textColor="@color/white"
+                android:alpha="0.9"
+                android:fontFamily="sans-serif-black"
+                android:letterSpacing="-0.02"
+                android:textStyle="bold"/>
+        </ScrollView>
+
+        <!-- Overlays must be last to be on top -->
+        <!-- Top Fade Overlay -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="150dp"
+            android:layout_alignParentTop="true"
+            android:background="@drawable/lyrics_top_fade"
+            android:clickable="false"
+            android:focusable="false" />
+
+        <!-- Bottom Fade Overlay -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="150dp"
+            android:layout_alignParentBottom="true"
+            android:background="@drawable/lyrics_bottom_fade"
+            android:clickable="false"
+            android:focusable="false" />
+
+    </RelativeLayout>
+    <include layout="@layout/dialog_res"/>
+</LinearLayout>

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/lyric_line_text"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center"
+    android:paddingStart="25dp"
+    android:paddingEnd="25dp"
+    android:paddingTop="14dp"
+    android:paddingBottom="14dp"
+    android:textSize="26sp"
+    android:textColor="@color/white"
+    android:fontFamily="sans-serif-black"
+    android:letterSpacing="-0.02"
+    android:textStyle="bold" />

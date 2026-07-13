@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Background track (Subtle) -->
+    <item android:id="@android:id/background">
+        <shape>
+            <corners android:radius="10dp" />
+            <solid android:color="#26FFFFFF" /> <!-- 15% alpha white -->
+            <size android:height="3dp" />
+        </shape>
+    </item>
+
+    <!-- Main progress (Bright White) -->
+    <item android:id="@android:id/progress">
+        <clip>
+            <shape>
+                <corners android:radius="10dp" />
+                <solid android:color="#FFFFFF" /> <!-- Solid white -->
+                <size android:height="3dp" />
+            </shape>
+        </clip>
+    </item>
+</layer-list>

@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:padding="10dp"
+    android:background="@android:color/transparent"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="50dp"
+        android:id="@+id/dialog_res"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+
+        android:background="@drawable/rec_drw_min_profile_bg">
+
+        <LinearLayout
+            android:layout_width="50dp"
+            android:layout_height="50dp"
+            android:background="@drawable/rec_drw_min_profile_bg"
+            android:gravity="center"
+            android:layout_marginEnd="10dp">
+
+            <com.google.android.material.imageview.ShapeableImageView
+                android:id="@+id/mini_profile"
+                android:layout_width="25dp"
+                android:layout_height="25dp"
+                android:contentDescription="@string/logo"
+                android:src="@drawable/profile"
+                android:scaleType="centerCrop"
+                app:shapeAppearanceOverlay="@style/miniRoundedImageView"
+                tools:ignore="VisualLintBounds"/>
+
+        </LinearLayout>
+        <TextView
+            android:id="@+id/dialog_txt"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:ellipsize="marquee"
+            android:fadingEdge="horizontal"
+            android:gravity="start|center_vertical"
+            android:hint="Song Title"
+            android:marqueeRepeatLimit="marquee_forever"
+            android:paddingStart="5dp"
+            android:paddingEnd="5dp"
+            android:singleLine="true"
+            android:textColor="@color/white" />
+        <RelativeLayout
+            android:layout_width="50dp"
+            android:layout_height="50dp">
+
+            <ProgressBar
+                android:id="@+id/progressbar"
+                android:layout_width="45dp"
+                android:layout_height="45dp"
+                android:layout_centerInParent="true"
+                android:indeterminate="false"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:progressDrawable="@drawable/circular_progress_bar" />
+
+            <ImageView
+                android:id="@+id/dialog_pause"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_centerInParent="true"
+                android:src="@drawable/pause" />
+        </RelativeLayout>
+    </LinearLayout>
+
+
+</LinearLayout>
