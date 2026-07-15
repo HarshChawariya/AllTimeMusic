@@ -10,7 +10,7 @@
     android:orientation="vertical"
     tools:context=".PlayList_Fragment">
 <!--@drawable/rec_draw-->
-
+<!--#9D201A-->
     <LinearLayout
         android:id="@+id/logo"
         android:layout_width="390dp"
@@ -26,7 +26,6 @@
             android:contentDescription="@string/logo"
             android:src="@drawable/profile"
             android:scaleType="centerCrop"
-
             app:shapeAppearanceOverlay="@style/RoundedImageView"
             tools:ignore="VisualLintBounds" />
 

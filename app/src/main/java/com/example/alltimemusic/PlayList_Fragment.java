@@ -48,6 +48,8 @@ public class PlayList_Fragment extends Fragment {
     private static com.google.android.material.imageview.ShapeableImageView profile;
     private LinearLayout rootLayout;
     private ArrayList<musicList_Structure> songs;
+    public static ArrayList<musicList_Structure> arrPlayNext = new ArrayList<>();
+    public static ArrayList<musicList_Structure> arrPlayList = new ArrayList<>();
     private static final ArrayList<Integer> shuffledIndices = new ArrayList<>();
     private static int shufflePointer = -1;
     public static MediaPlayer mediaPlayer;
@@ -87,6 +89,7 @@ public class PlayList_Fragment extends Fragment {
 
     public void updateSongFromAdapter() {
         songs = musicList_Recycler_Adapter.fullMusicList;
+        arrPlayList = songs;
         position = musicList_Recycler_Adapter.currentPosition;
 
         if (playingPosition != position || mediaPlayer == null) {
@@ -97,8 +100,8 @@ public class PlayList_Fragment extends Fragment {
     }
 
     public void toggleFavourite() {
-        if (songs == null || songs.isEmpty()) return;
-        musicList_Structure currentSong = songs.get(position);
+        if (arrPlayList == null || arrPlayList.isEmpty()) return;
+        musicList_Structure currentSong = arrPlayList.get(position);
 
         try (FavoritesDatabase db = new FavoritesDatabase(getContext())) {
             if (!db.isFavorite(currentSong.songPath)) {
@@ -131,7 +134,8 @@ public class PlayList_Fragment extends Fragment {
                 if (showToast) Toast.makeText(getContext(), "Loop Off", Toast.LENGTH_SHORT).show();
                 break;
             case 1: // Single Loop
-                mediaPlayer.setLooping(true);
+                // Don't use mediaPlayer.setLooping(true) so onCompletionListener can handle queue
+                mediaPlayer.setLooping(false); 
                 loopButton.setImageResource(R.drawable.single_loop);
                 if (showToast) Toast.makeText(getContext(), "Single Loop", Toast.LENGTH_SHORT).show();
                 break;
@@ -143,7 +147,7 @@ public class PlayList_Fragment extends Fragment {
             case 3: // Shuffle
                 mediaPlayer.setLooping(false);
                 loopButton.setImageResource(R.drawable.shuffle);
-                if (shuffledIndices.size() != songs.size()) {
+                if (shuffledIndices.size() != (arrPlayList != null ? arrPlayList.size() : 0)) {
                     setupShuffleQueue();
                 }
                 if (showToast) Toast.makeText(getContext(), "Shuffle On", Toast.LENGTH_SHORT).show();
@@ -152,9 +156,9 @@ public class PlayList_Fragment extends Fragment {
     }
 
     private void setupShuffleQueue() {
-        if (songs == null || songs.isEmpty()) return;
+        if (arrPlayList == null || arrPlayList.isEmpty()) return;
         shuffledIndices.clear();
-        for (int i = 0; i < songs.size(); i++) {
+        for (int i = 0; i < arrPlayList.size(); i++) {
             shuffledIndices.add(i);
         }
         Collections.shuffle(shuffledIndices);
@@ -168,8 +172,8 @@ public class PlayList_Fragment extends Fragment {
     }
 
     public void syncUIWithCurrentSong() {
-        if (mediaPlayer != null && songs != null && !songs.isEmpty()) {
-            musicList_Structure currentSong = songs.get(position);
+        if (mediaPlayer != null && arrPlayList != null && !arrPlayList.isEmpty()) {
+            musicList_Structure currentSong = arrPlayList.get(position);
             songTitleTextView.setText(currentSong.songTitle);
             artist_name.setText(currentSong.getCleanArtist());
 
@@ -269,8 +273,37 @@ public class PlayList_Fragment extends Fragment {
         }
     }
 
+    private void playFromNextQueue() {
+        if (arrPlayNext.isEmpty()) return;
+        musicList_Structure nextSong = arrPlayNext.remove(0);
+
+        musicList_Recycler_Adapter.currentItem = nextSong;
+
+        if (arrPlayList != null) {
+            for (int i = 0; i < arrPlayList.size(); i++) {
+                if (arrPlayList.get(i).songPath.equals(nextSong.songPath)) {
+                    position = i;
+                    musicList_Recycler_Adapter.currentPosition = position;
+                    
+                    // Sync shuffle pointer if in shuffle mode
+                    if (currentLoopMode == 3 && shuffledIndices.size() == arrPlayList.size()) {
+                        for (int j = 0; j < shuffledIndices.size(); j++) {
+                            if (shuffledIndices.get(j) == position) {
+                                shufflePointer = j;
+                                break;
+                            }
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+
+        playSong();
+    }
+
     public void playSong() {
-        if (songs == null || songs.isEmpty()) return;
+        if (arrPlayList == null || arrPlayList.isEmpty()) return;
 
         if (mediaPlayer != null) {
             try {
@@ -280,7 +313,11 @@ public class PlayList_Fragment extends Fragment {
             mediaPlayer = null;
         }
 
-        musicList_Structure currentSong = songs.get(position);
+        musicList_Structure currentSong = musicList_Recycler_Adapter.currentItem;
+        if (currentSong == null) {
+            currentSong = arrPlayList.get(position);
+        }
+
         try {
             mediaPlayer = MediaPlayer.create(getContext(), Uri.parse(currentSong.songPath));
             if (mediaPlayer != null) {
@@ -288,8 +325,10 @@ public class PlayList_Fragment extends Fragment {
                 mediaPlayer.start();
 
                 mediaPlayer.setOnCompletionListener(mp -> {
-                    if (currentLoopMode == 1) {
-                        startSeekBarUpdate();
+                    if (!arrPlayNext.isEmpty()) {
+                        playFromNextQueue();
+                    } else if (currentLoopMode == 1) {
+                        playSong();
                     } else if (currentLoopMode == 2 || currentLoopMode == 3) {
                         playNext();
                     } else if (currentLoopMode == 0) {
@@ -328,34 +367,39 @@ public class PlayList_Fragment extends Fragment {
     }
 
     public void playNext() {
-        if (songs == null || songs.isEmpty()) return;
+        if (arrPlayList == null || arrPlayList.isEmpty()) return;
+
+        if (!arrPlayNext.isEmpty()) {
+            playFromNextQueue();
+            return;
+        }
 
         if (currentLoopMode == 3) { // Shuffle
-            if (shuffledIndices.size() != songs.size()) setupShuffleQueue();
+            if (shuffledIndices.size() != arrPlayList.size()) setupShuffleQueue();
             shufflePointer = (shufflePointer + 1) % shuffledIndices.size();
             position = shuffledIndices.get(shufflePointer);
         } else {
-            position = (position + 1) % songs.size();
+            position = (position + 1) % arrPlayList.size();
         }
 
         musicList_Recycler_Adapter.currentPosition = position;
-        musicList_Recycler_Adapter.currentItem = songs.get(position);
+        musicList_Recycler_Adapter.currentItem = arrPlayList.get(position);
         playSong();
     }
 
     public void playPrevious() {
-        if (songs == null || songs.isEmpty()) return;
+        if (arrPlayList == null || arrPlayList.isEmpty()) return;
 
         if (currentLoopMode == 3) { // Shuffle
-            if (shuffledIndices.size() != songs.size()) setupShuffleQueue();
+            if (shuffledIndices.size() != arrPlayList.size()) setupShuffleQueue();
             shufflePointer = (shufflePointer - 1 + shuffledIndices.size()) % shuffledIndices.size();
             position = shuffledIndices.get(shufflePointer);
         } else {
-            position = (position - 1 + songs.size()) % songs.size();
+            position = (position - 1 + arrPlayList.size()) % arrPlayList.size();
         }
 
         musicList_Recycler_Adapter.currentPosition = position;
-        musicList_Recycler_Adapter.currentItem = songs.get(position);
+        musicList_Recycler_Adapter.currentItem = arrPlayList.get(position);
         playSong();
     }
 
@@ -392,6 +436,7 @@ public class PlayList_Fragment extends Fragment {
         artist_name = view.findViewById(R.id.song_Artist_TextView);
 
         songs = musicList_Recycler_Adapter.fullMusicList;
+        arrPlayList = songs;
         position = musicList_Recycler_Adapter.currentPosition;
 
         if (songs != null && !songs.isEmpty()) {

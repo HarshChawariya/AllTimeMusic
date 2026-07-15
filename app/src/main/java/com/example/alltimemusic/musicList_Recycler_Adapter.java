@@ -146,8 +146,10 @@ public class musicList_Recycler_Adapter extends RecyclerView.Adapter<musicList_R
                     
                     musicList_Structure selectedSong = musicList.get(currentIdx);
                     
-                    if (currentItem == null) {
-                        // If nothing is playing, play this song immediately
+                    if (PlayList_Fragment.mediaPlayer != null && PlayList_Fragment.mediaPlayer.isPlaying()) {
+                        PlayList_Fragment.arrPlayNext.add(selectedSong);
+                        Toast.makeText(context, "Playing next turn: " + selectedSong.songTitle, Toast.LENGTH_SHORT).show();
+                    } else {
                         currentItem = selectedSong;
                         currentPosition = currentIdx;
                         fullMusicList = musicList;
@@ -156,29 +158,6 @@ public class musicList_Recycler_Adapter extends RecyclerView.Adapter<musicList_R
                         } else if (context instanceof LikedSongsActivity) {
                             MainActivity.isReturningFromLiked = true;
                             ((LikedSongsActivity) context).openPlayerLayout();
-                        }
-                    } else {
-                        // If a song is playing, move this song to next position in the playback list
-                        if (fullMusicList == null) fullMusicList = musicList;
-                        
-                        int foundIdx = -1;
-                        for (int i = 0; i < fullMusicList.size(); i++) {
-                            if (fullMusicList.get(i).songPath.equals(selectedSong.songPath)) {
-                                foundIdx = i;
-                                break;
-                            }
-                        }
-                        
-                        if (foundIdx != -1) {
-                            musicList_Structure songToMove = fullMusicList.remove(foundIdx);
-                            if (foundIdx <= currentPosition && currentPosition > 0) {
-                                currentPosition--;
-                            }
-                            
-                            int nextPos = (currentPosition + 1) % (fullMusicList.size() + 1);
-                            fullMusicList.add(nextPos, songToMove);
-                            
-                            Toast.makeText(context, "Playing next: " + selectedSong.songTitle, Toast.LENGTH_SHORT).show();
                         }
                     }
                 } else if (title.equals("Add To Favourite") || title.equals("Removed From Favourite")) {
