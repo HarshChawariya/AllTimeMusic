@@ -153,11 +153,12 @@ public class Lyrics_Fragment extends Fragment {
             if (PlayList_Fragment.mediaPlayer != null) {
                 if (PlayList_Fragment.mediaPlayer.isPlaying()) {
                     PlayList_Fragment.mediaPlayer.pause();
-                    miniPause.setImageResource(R.drawable.play);
                 } else {
                     PlayList_Fragment.mediaPlayer.start();
-                    miniPause.setImageResource(R.drawable.pause);
-                    startProgressUpdate();
+                }
+                // Sync all UI components
+                if (getActivity() instanceof MainActivity) {
+                    ((MainActivity) getActivity()).updateMiniPlayer();
                 }
             }
         });
@@ -625,6 +626,15 @@ public class Lyrics_Fragment extends Fragment {
 
     private void updateMiniPlayerUI() {
         updateLyricsSync();
+    }
+
+    public void updateMiniPauseIcon() {
+        if (PlayList_Fragment.mediaPlayer != null && miniPause != null) {
+            miniPause.setImageResource(PlayList_Fragment.mediaPlayer.isPlaying() ? R.drawable.pause : R.drawable.play);
+            if (PlayList_Fragment.mediaPlayer.isPlaying()) {
+                startProgressUpdate();
+            }
+        }
     }
 
     private void startProgressUpdate() {

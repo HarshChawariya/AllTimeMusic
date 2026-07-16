@@ -497,6 +497,12 @@ public class PlayList_Fragment extends Fragment {
         return lines;
     }
 
+    public void updatePauseIcon() {
+        if (mediaPlayer != null && pause != null) {
+            pause.setImageResource(mediaPlayer.isPlaying() ? R.drawable.pause : R.drawable.play);
+        }
+    }
+
     public String createTime(int ms) {
         int sec = ms / 1000;
         return String.format(Locale.US, "%d:%02d", sec / 60, sec % 60);

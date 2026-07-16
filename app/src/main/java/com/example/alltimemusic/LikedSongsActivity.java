@@ -98,11 +98,10 @@ public class LikedSongsActivity extends AppCompatActivity {
         if (PlayList_Fragment.mediaPlayer != null) {
             if (PlayList_Fragment.mediaPlayer.isPlaying()) {
                 PlayList_Fragment.mediaPlayer.pause();
-                miniPause.setImageResource(R.drawable.play);
             } else {
                 PlayList_Fragment.mediaPlayer.start();
-                miniPause.setImageResource(R.drawable.pause);
             }
+            updateMiniPlayer();
         }
     }
 
