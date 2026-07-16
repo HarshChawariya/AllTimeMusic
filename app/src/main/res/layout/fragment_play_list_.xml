@@ -68,13 +68,33 @@
     </LinearLayout>
 
     <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="90dp"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="20dp">
+
+        <TextView
+            android:id="@+id/playList_Fragment_syncedLyricsTextView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:textSize="20sp"
+            android:gravity="center_vertical"
+            android:textColor="@color/white"
+            android:textStyle="bold"
+            android:fadingEdge="vertical"
+            android:requiresFadingEdge="vertical"
+            android:fadingEdgeLength="20dp"
+            android:visibility="gone"/>
+    </LinearLayout>
+
+    <LinearLayout
         android:id="@+id/linearLayOutSeekBar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center"
-        android:layout_marginTop="95dp"
+        android:layout_marginTop="5dp"
         android:orientation="horizontal">
-
+<!--android:layout_marginTop="95dp"-->
         <TextView
             android:id="@+id/textSeek1"
             android:layout_width="40dp"

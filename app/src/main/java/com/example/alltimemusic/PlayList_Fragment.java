@@ -5,10 +5,7 @@ import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
-import android.graphics.ColorFilter;
-import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
-import android.media.MediaMetadataRetriever;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Bundle;
@@ -36,13 +33,14 @@ import com.google.android.material.imageview.ShapeableImageView;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
 
 public class PlayList_Fragment extends Fragment {
 
     private static final String key1 = "ARG1";
     private static final String key2 = "ARG2";
-    private TextView songTitleTextView, artist_name, textSeek1, textSeek2;
+    private TextView songTitleTextView, artist_name, textSeek1, textSeek2, syncedLyricsTxt;
     private SeekBar seekBar;
     private ImageView pause, next, previous, loopButton, favButton;
     private static com.google.android.material.imageview.ShapeableImageView profile;
@@ -51,6 +49,8 @@ public class PlayList_Fragment extends Fragment {
     public static ArrayList<musicList_Structure> arrPlayNext = new ArrayList<>();
     public static ArrayList<musicList_Structure> arrPlayList = new ArrayList<>();
     private static final ArrayList<Integer> shuffledIndices = new ArrayList<>();
+    private List<LyricLine> lyricLines = new ArrayList<>();
+    private int currentLyricIndex = -1;
     private static int shufflePointer = -1;
     public static MediaPlayer mediaPlayer;
     private LinearLayout logo;
@@ -64,10 +64,20 @@ public class PlayList_Fragment extends Fragment {
         public void run() {
             if (mediaPlayer != null) {
                 try {
+                    int currentPos = mediaPlayer.getCurrentPosition();
+                    if (seekBar != null) {
+                        seekBar.setProgress(currentPos);
+                    }
+                    if (textSeek1 != null) {
+                        textSeek1.setText(createTime(currentPos));
+                    }
+
+                    if (syncedLyricsTxt != null && syncedLyricsTxt.getVisibility() == View.VISIBLE && !lyricLines.isEmpty()) {
+                        updateSyncedLyrics(currentPos);
+                    }
+
                     if (mediaPlayer.isPlaying()) {
-                        seekBar.setProgress(mediaPlayer.getCurrentPosition());
-                        textSeek1.setText(createTime(mediaPlayer.getCurrentPosition()));
-                        seekBarHandler.postDelayed(this, 1000);
+                        seekBarHandler.postDelayed(this, 500); // Faster update for smooth lyrics
                     }
                 } catch (IllegalStateException e) {
                     // Ignore state errors during background updates
@@ -174,22 +184,25 @@ public class PlayList_Fragment extends Fragment {
     public void syncUIWithCurrentSong() {
         if (mediaPlayer != null && arrPlayList != null && !arrPlayList.isEmpty()) {
             musicList_Structure currentSong = arrPlayList.get(position);
-            songTitleTextView.setText(currentSong.songTitle);
-            artist_name.setText(currentSong.getCleanArtist());
+            if (songTitleTextView != null) songTitleTextView.setText(currentSong.songTitle);
+            if (artist_name != null) artist_name.setText(currentSong.getCleanArtist());
 
             updateProfileImage(profile, currentSong);
+            loadSyncedLyrics(currentSong.songPath);
 
             try (FavoritesDatabase db = new FavoritesDatabase(getContext())) {
                 currentSong.isFavourite = db.isFavorite(currentSong.songPath);
             }
 
-            favButton.setImageResource(currentSong.isFavourite ? R.drawable.fill_heart : R.drawable.boder_of_heart);
+            if (favButton != null) favButton.setImageResource(currentSong.isFavourite ? R.drawable.fill_heart : R.drawable.boder_of_heart);
 
-            seekBar.setMax(mediaPlayer.getDuration());
-            seekBar.setProgress(mediaPlayer.getCurrentPosition());
-            textSeek1.setText(createTime(mediaPlayer.getCurrentPosition()));
-            textSeek2.setText(createTime(mediaPlayer.getDuration()));
-            pause.setImageResource(mediaPlayer.isPlaying() ? R.drawable.pause : R.drawable.play);
+            if (seekBar != null) {
+                seekBar.setMax(mediaPlayer.getDuration());
+                seekBar.setProgress(mediaPlayer.getCurrentPosition());
+            }
+            if (textSeek1 != null) textSeek1.setText(createTime(mediaPlayer.getCurrentPosition()));
+            if (textSeek2 != null) textSeek2.setText(createTime(mediaPlayer.getDuration()));
+            if (pause != null) pause.setImageResource(mediaPlayer.isPlaying() ? R.drawable.pause : R.drawable.play);
 
             startSeekBarUpdate();
             applyLoopMode(false);
@@ -332,9 +345,9 @@ public class PlayList_Fragment extends Fragment {
                     } else if (currentLoopMode == 2 || currentLoopMode == 3) {
                         playNext();
                     } else if (currentLoopMode == 0) {
-                        pause.setImageResource(R.drawable.play);
-                        seekBar.setProgress(mp.getDuration());
-                        textSeek1.setText(createTime(mp.getDuration()));
+                        if (pause != null) pause.setImageResource(R.drawable.play);
+                        if (seekBar != null) seekBar.setProgress(mp.getDuration());
+                        if (textSeek1 != null) textSeek1.setText(createTime(mp.getDuration()));
                         notifyActivity();
                     }
                 });
@@ -344,18 +357,21 @@ public class PlayList_Fragment extends Fragment {
                     return true;
                 });
 
-                songTitleTextView.setText(currentSong.songTitle);
-                artist_name.setText(currentSong.getCleanArtist());
+                if (songTitleTextView != null) songTitleTextView.setText(currentSong.songTitle);
+                if (artist_name != null) artist_name.setText(currentSong.getCleanArtist());
                 updateProfileImage(profile, currentSong);
+                loadSyncedLyrics(currentSong.songPath);
 
                 try (FavoritesDatabase db = new FavoritesDatabase(getContext())) {
                     currentSong.isFavourite = db.isFavorite(currentSong.songPath);
                 }
-                favButton.setImageResource(currentSong.isFavourite ? R.drawable.fill_heart : R.drawable.boder_of_heart);
+                if (favButton != null) favButton.setImageResource(currentSong.isFavourite ? R.drawable.fill_heart : R.drawable.boder_of_heart);
 
-                seekBar.setMax(mediaPlayer.getDuration());
-                textSeek2.setText(createTime(mediaPlayer.getDuration()));
-                pause.setImageResource(R.drawable.pause);
+                if (seekBar != null) {
+                    seekBar.setMax(mediaPlayer.getDuration());
+                }
+                if (textSeek2 != null) textSeek2.setText(createTime(mediaPlayer.getDuration()));
+                if (pause != null) pause.setImageResource(R.drawable.pause);
                 startSeekBarUpdate();
 
                 notifyActivity();
@@ -403,6 +419,84 @@ public class PlayList_Fragment extends Fragment {
         playSong();
     }
 
+    private void loadSyncedLyrics(String path) {
+        // BUG FIX: Reset everything immediately to avoid showing previous song lyrics
+        if (syncedLyricsTxt != null) {
+            syncedLyricsTxt.setText("");
+            syncedLyricsTxt.setVisibility(View.GONE);
+        }
+        lyricLines.clear();
+        currentLyricIndex = -1;
+
+        if (getContext() == null) return;
+        FavoritesDatabase db = new FavoritesDatabase(getContext());
+        String[] cached = db.getCachedLyrics(path);
+        
+        if (cached != null && cached[1] != null && !cached[1].isEmpty() && !cached[1].equalsIgnoreCase("null")) {
+            lyricLines = parseLRC(cached[1]);
+            if (!lyricLines.isEmpty()) {
+                if (syncedLyricsTxt != null) {
+                    syncedLyricsTxt.setVisibility(View.VISIBLE);
+                }
+                return;
+            }
+        }
+    }
+
+    private void updateSyncedLyrics(int currentMs) {
+        int index = -1;
+        for (int i = 0; i < lyricLines.size(); i++) {
+            if (currentMs >= lyricLines.get(i).getTimeMs()) {
+                index = i;
+            } else {
+                break;
+            }
+        }
+
+        if (index != -1 && index != currentLyricIndex) {
+            currentLyricIndex = index;
+            String text = lyricLines.get(index).getText();
+            if (syncedLyricsTxt != null) {
+                syncedLyricsTxt.setText(text);
+                
+                // Spotify style slide up animation
+                android.view.animation.Animation slideUp = android.view.animation.AnimationUtils.loadAnimation(getContext(), R.anim.slide_up);
+                syncedLyricsTxt.startAnimation(slideUp);
+            }
+        }
+    }
+
+    private java.util.List<LyricLine> parseLRC(String lrc) {
+        java.util.List<LyricLine> lines = new java.util.ArrayList<>();
+        if (lrc == null) return lines;
+
+        String[] split = lrc.split("\n");
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("\\[(\\d{2}):(\\d{2})\\.(\\d{2,3})](.*)");
+
+        for (String line : split) {
+            java.util.regex.Matcher matcher = pattern.matcher(line);
+            if (matcher.find()) {
+                try {
+                    long min = Long.parseLong(matcher.group(1));
+                    long sec = Long.parseLong(matcher.group(2));
+                    String msStrRaw = matcher.group(3);
+                    long ms = Long.parseLong(msStrRaw);
+                    if (msStrRaw.length() == 2) ms *= 10;
+
+                    long time = (min * 60 * 1000) + (sec * 1000) + ms;
+                    String text = matcher.group(4).trim();
+
+                    if (!text.isEmpty()) {
+                        lines.add(new LyricLine(time, text));
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+        return lines;
+    }
+
     public String createTime(int ms) {
         int sec = ms / 1000;
         return String.format(Locale.US, "%d:%02d", sec / 60, sec % 60);
@@ -434,13 +528,14 @@ public class PlayList_Fragment extends Fragment {
         songTitleTextView = view.findViewById(R.id.songTitleTextView);
         songTitleTextView.setSelected(true);
         artist_name = view.findViewById(R.id.song_Artist_TextView);
+        syncedLyricsTxt = view.findViewById(R.id.playList_Fragment_syncedLyricsTextView);
 
         songs = musicList_Recycler_Adapter.fullMusicList;
         arrPlayList = songs;
         position = musicList_Recycler_Adapter.currentPosition;
 
-        if (songs != null && !songs.isEmpty()) {
-            musicList_Structure current = songs.get(position);
+        if (arrPlayList != null && !arrPlayList.isEmpty()) {
+            musicList_Structure current = arrPlayList.get(position);
             songTitleTextView.setText(current.songTitle);
             artist_name.setText(current.getCleanArtist());
             updateProfileImage(profile, current);
