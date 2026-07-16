@@ -293,6 +293,7 @@ public class MainActivity extends AppCompatActivity {
 
             for (Fragment fragment : getSupportFragmentManager().getFragments()) {
                 if (fragment instanceof Lyrics_Fragment) {
+                    ((Lyrics_Fragment) fragment).updateLyricsSync(); // BUG FIX: Sync full metadata and lyrics
                     ((Lyrics_Fragment) fragment).updateMiniPauseIcon();
                 } else if (fragment instanceof PlayList_Fragment) {
                     ((PlayList_Fragment) fragment).updatePauseIcon();
