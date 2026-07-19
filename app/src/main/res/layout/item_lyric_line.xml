@@ -1,15 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
-<TextView xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/lyric_line_text"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:gravity="center"
-    android:paddingStart="25dp"
-    android:paddingEnd="25dp"
-    android:paddingTop="14dp"
-    android:paddingBottom="14dp"
-    android:textSize="26sp"
-    android:textColor="@color/white"
-    android:fontFamily="sans-serif-black"
-    android:letterSpacing="-0.02"
-    android:textStyle="bold" />
+    android:layout_height="wrap_content">
+    <TextView
+        android:id="@+id/lyric_line_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:fontFamily="@font/montserrat_bold"
+        android:letterSpacing="-0.05"
+        android:lineSpacingMultiplier="0.95"
+        android:text="apanee shaamon mein hissaa phir kisi ko na diya"
+        android:gravity="start"
+        android:textAlignment="viewStart"
+        android:maxLines="3"
+        android:layout_marginTop="10dp"
+        android:layout_marginBottom="10dp"
+        android:layout_marginStart="10dp"
+        android:layout_marginEnd="30dp"
+        android:textSize="20sp" />
+
+</LinearLayout>
+

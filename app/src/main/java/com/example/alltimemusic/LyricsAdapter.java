@@ -42,13 +42,19 @@ public class LyricsAdapter extends RecyclerView.Adapter<LyricsAdapter.ViewHolder
         holder.textView.setText(line.getText());
 
         if (position == activeIndex) {
+            // Main lyric: Full White
+            holder.textView.setTextColor(android.graphics.Color.WHITE);
             holder.textView.setAlpha(1.0f);
-            holder.textView.setScaleX(1.12f);
-            holder.textView.setScaleY(1.12f);
+
+            // Animation (Ensure it scales if needed)
+            android.view.animation.Animation slideUp = android.view.animation.AnimationUtils.loadAnimation(holder.itemView.getContext(), R.anim.slide_up_scale);
+            holder.textView.startAnimation(slideUp);
         } else {
-            holder.textView.setAlpha(0.4f);
-            holder.textView.setScaleX(0.8f);
-            holder.textView.setScaleY(0.8f);
+            // Other lyrics: Using a specific low-opacity white hex (#33FFFFFF = 20% Alpha)
+            // This ensures they look dimmed even if the background is dark
+            holder.textView.setTextColor(android.graphics.Color.parseColor("#80FFFFFF"));
+            holder.textView.setAlpha(1.0f);
+            holder.textView.clearAnimation();
         }
     }
 

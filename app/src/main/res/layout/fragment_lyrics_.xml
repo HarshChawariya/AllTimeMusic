@@ -12,32 +12,35 @@
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:weightSum="2">
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="25dp"
-            android:id="@+id/song_name_txt"
-            android:textSize="17sp"
-            android:text="@string/radhakrishna"
-            android:gravity="center"
-            android:layout_gravity="center_horizontal"
-            android:textColor="@color/white"
-            android:layout_weight="1"
-            android:marqueeRepeatLimit="marquee_forever"
-            android:ellipsize="marquee"
-            android:fadingEdge="horizontal"
-            android:textStyle="bold"/>
 
         <TextView
+            android:id="@+id/song_name_txt"
+            android:layout_width="wrap_content"
+            android:layout_height="25dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_weight="1"
+            android:ellipsize="marquee"
+            android:fadingEdge="horizontal"
+            android:gravity="center"
+            android:marqueeRepeatLimit="marquee_forever"
+            android:text="@string/radhakrishna"
+            android:textColor="@color/white"
+            android:textSize="17sp"
+            android:textStyle="bold"
+            tools:ignore="TextSizeCheck" />
+
+        <TextView
+            android:id="@+id/artist_txt"
             android:layout_width="wrap_content"
             android:layout_height="20dp"
-            android:id="@+id/artist_txt"
-            android:textSize="14sp"
-            android:layout_weight="1"
-            android:text="@string/unknown_artist_name"
-            android:gravity="center"
             android:layout_gravity="center_horizontal"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="@string/unknown_artist_name"
             android:textColor="@color/white"
-            android:textStyle="bold"/>
+            android:textSize="14sp"
+            android:textStyle="bold"
+            tools:ignore="TextSizeCheck" />
     </LinearLayout>
 
     <RelativeLayout
@@ -51,10 +54,10 @@
             android:layout_height="match_parent"
             android:overScrollMode="never"
             android:scrollbars="none"
-            android:paddingStart="20dp"
-            android:paddingEnd="20dp"
             android:paddingTop="150dp"
             android:paddingBottom="300dp"
+            android:paddingStart="10dp"
+            android:paddingEnd="50dp"
             android:clipToPadding="false"/>
 
         <ScrollView
@@ -64,8 +67,6 @@
             android:visibility="gone"
             android:overScrollMode="never"
             android:scrollbars="none"
-            android:paddingStart="20dp"
-            android:paddingEnd="20dp"
             android:paddingTop="50dp"
             android:paddingBottom="150dp"
             android:clipToPadding="false">
@@ -74,15 +75,18 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:id="@+id/lyrics_txt"
-                android:gravity="center_horizontal"
-                android:lineSpacingExtra="10dp"
-                android:textSize="26sp"
+                android:fontFamily="@font/montserrat_bold"
+                android:letterSpacing="-0.05"
+                android:lineSpacingMultiplier="1.5"
                 android:text="@string/lyrics_will_be_appearing"
+                android:gravity="start"
                 android:textColor="@color/white"
-                android:alpha="0.9"
-                android:fontFamily="sans-serif-black"
-                android:letterSpacing="-0.02"
-                android:textStyle="bold"/>
+                android:textAlignment="viewStart"
+                android:layout_marginTop="10dp"
+                android:layout_marginBottom="10dp"
+                android:layout_marginStart="10dp"
+                android:layout_marginEnd="40dp"
+                android:textSize="22sp" />
         </ScrollView>
 
         <!-- Overlays must be last to be on top -->
