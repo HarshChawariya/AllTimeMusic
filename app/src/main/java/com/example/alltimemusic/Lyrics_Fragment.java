@@ -128,6 +128,19 @@ public class Lyrics_Fragment extends Fragment {
         lyricsRecycler = view.findViewById(R.id.lyrics_recycler);
         
         lyricsAdapter = new LyricsAdapter();
+        lyricsAdapter.setOnLyricClickListener(timeMs -> {
+            if (PlayList_Fragment.mediaPlayer != null) {
+                PlayList_Fragment.mediaPlayer.seekTo(timeMs);
+                if (!PlayList_Fragment.mediaPlayer.isPlaying()) {
+                    PlayList_Fragment.mediaPlayer.start();
+                    // Sync play/pause icons
+                    if (getActivity() instanceof MainActivity) {
+                        ((MainActivity) getActivity()).updateMiniPlayer();
+                    }
+                    updateMiniPauseIcon();
+                }
+            }
+        });
         lyricsRecycler.setLayoutManager(new LinearLayoutManager(getContext()));
         lyricsRecycler.setAdapter(lyricsAdapter);
         

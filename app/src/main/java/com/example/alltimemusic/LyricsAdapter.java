@@ -11,13 +11,22 @@ import java.util.List;
 
 public class LyricsAdapter extends RecyclerView.Adapter<LyricsAdapter.ViewHolder> {
 
+    public interface OnLyricClickListener {
+        void onLyricClick(int timeMs);
+    }
+
     private List<LyricLine> lyrics = new ArrayList<>();
     private int activeIndex = -1;
+    private OnLyricClickListener clickListener;
 
     public void setLyrics(List<LyricLine> lyrics) {
         this.lyrics = lyrics;
         this.activeIndex = -1;
         notifyDataSetChanged();
+    }
+
+    public void setOnLyricClickListener(OnLyricClickListener listener) {
+        this.clickListener = listener;
     }
 
     public void setActiveIndex(int index) {
@@ -40,6 +49,12 @@ public class LyricsAdapter extends RecyclerView.Adapter<LyricsAdapter.ViewHolder
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         LyricLine line = lyrics.get(position);
         holder.textView.setText(line.getText());
+
+        holder.itemView.setOnClickListener(v -> {
+            if (clickListener != null) {
+                clickListener.onLyricClick((int) line.getTimeMs());
+            }
+        });
 
         if (position == activeIndex) {
             // Main lyric: Full White
