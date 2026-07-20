@@ -211,8 +211,14 @@ public class musicList_Recycler_Adapter extends RecyclerView.Adapter<musicList_R
             }
         }
         
-        if (previous != -1) notifyItemChanged(previous);
-        if (selectedPosition != -1) notifyItemChanged(selectedPosition);
+        // Safety: We only call notifyItemChanged if the positions are valid for the current list state.
+        int count = getItemCount();
+        if (previous != -1 && previous < count) {
+            notifyItemChanged(previous);
+        }
+        if (selectedPosition != -1 && selectedPosition < count) {
+            notifyItemChanged(selectedPosition);
+        }
     }
 
     private void updateListProfileImage(ImageView imageView, musicList_Structure item) {

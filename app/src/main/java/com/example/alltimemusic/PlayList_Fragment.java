@@ -111,25 +111,50 @@ public class PlayList_Fragment extends Fragment {
 
     public void toggleFavourite() {
         if (arrPlayList == null || arrPlayList.isEmpty()) return;
-        musicList_Structure currentSong = arrPlayList.get(position);
+
+        // Use globally tracked currentItem to avoid index shift issues when removing from Liked list
+        musicList_Structure currentSong = musicList_Recycler_Adapter.currentItem;
+        if (currentSong == null) {
+            currentSong = arrPlayList.get(position);
+        }
 
         try (FavoritesDatabase db = new FavoritesDatabase(getContext())) {
             if (!db.isFavorite(currentSong.songPath)) {
                 db.addFavorite(currentSong);
                 currentSong.isFavourite = true;
                 favButton.setImageResource(R.drawable.fill_heart);
-                Toast.makeText(getContext(), "Added To Favourite", Toast.LENGTH_SHORT).show();
+                Toast.makeText(getContext(), getString(R.string.added_to_favorite), Toast.LENGTH_SHORT).show();
             } else {
                 db.removeFavorite(currentSong.songPath);
                 currentSong.isFavourite = false;
                 favButton.setImageResource(R.drawable.boder_of_heart);
-                Toast.makeText(getActivity(), "Removed From Favourite", Toast.LENGTH_SHORT).show();
+                Toast.makeText(getActivity(), getString(R.string.removed_from_favorite), Toast.LENGTH_SHORT).show();
+            }
+        }
+
+        // IMPORTANT: Immediate Position Sync to prevent crash on re-addition/removal
+        if (arrPlayList != null) {
+            boolean found = false;
+            for (int i = 0; i < arrPlayList.size(); i++) {
+                if (arrPlayList.get(i).songPath.equals(currentSong.songPath)) {
+                    position = i;
+                    musicList_Recycler_Adapter.currentPosition = i;
+                    found = true;
+                    break;
+                }
+            }
+            // If not found (item removed), ensure position is still within bounds for the new list size
+            if (!found && position >= arrPlayList.size()) {
+                position = Math.max(0, arrPlayList.size() - 1);
+                musicList_Recycler_Adapter.currentPosition = position;
             }
         }
 
         if (getActivity() instanceof MainActivity) {
+            ((MainActivity) getActivity()).updateMiniPlayer();
             ((MainActivity) getActivity()).updateRecyclerViewSelection();
         } else if (getActivity() instanceof LikedSongsActivity) {
+            ((LikedSongsActivity) getActivity()).updateMiniPlayer();
             ((LikedSongsActivity) getActivity()).updateRecyclerViewSelection();
         }
     }
@@ -141,18 +166,18 @@ public class PlayList_Fragment extends Fragment {
             case 0: // No Loop
                 mediaPlayer.setLooping(false);
                 loopButton.setImageResource(R.drawable.no_loop);
-                if (showToast) Toast.makeText(getContext(), "Loop Off", Toast.LENGTH_SHORT).show();
+                if (showToast) Toast.makeText(getContext(), getString(R.string.loop_off), Toast.LENGTH_SHORT).show();
                 break;
             case 1: // Single Loop
                 // Don't use mediaPlayer.setLooping(true) so onCompletionListener can handle queue
                 mediaPlayer.setLooping(false); 
                 loopButton.setImageResource(R.drawable.single_loop);
-                if (showToast) Toast.makeText(getContext(), "Single Loop", Toast.LENGTH_SHORT).show();
+                if (showToast) Toast.makeText(getContext(), getString(R.string.single_loop), Toast.LENGTH_SHORT).show();
                 break;
             case 2: // Playlist Loop
                 mediaPlayer.setLooping(false);
                 loopButton.setImageResource(R.drawable.play_list_loop);
-                if (showToast) Toast.makeText(getContext(), "Playlist Loop", Toast.LENGTH_SHORT).show();
+                if (showToast) Toast.makeText(getContext(), getString(R.string.playlist_loop), Toast.LENGTH_SHORT).show();
                 break;
             case 3: // Shuffle
                 mediaPlayer.setLooping(false);
@@ -160,7 +185,7 @@ public class PlayList_Fragment extends Fragment {
                 if (shuffledIndices.size() != (arrPlayList != null ? arrPlayList.size() : 0)) {
                     setupShuffleQueue();
                 }
-                if (showToast) Toast.makeText(getContext(), "Shuffle On", Toast.LENGTH_SHORT).show();
+                if (showToast) Toast.makeText(getContext(), getString(R.string.shuffle_on), Toast.LENGTH_SHORT).show();
                 break;
         }
     }
@@ -183,6 +208,11 @@ public class PlayList_Fragment extends Fragment {
 
     public void syncUIWithCurrentSong() {
         if (mediaPlayer != null && arrPlayList != null && !arrPlayList.isEmpty()) {
+            // Safety Check: Ensure position is valid for the current list size
+            if (position < 0 || position >= arrPlayList.size()) {
+                position = 0; // Default to first if out of bounds
+            }
+            
             musicList_Structure currentSong = arrPlayList.get(position);
             if (songTitleTextView != null) songTitleTextView.setText(currentSong.songTitle);
             if (artist_name != null) artist_name.setText(currentSong.getCleanArtist());
@@ -353,7 +383,7 @@ public class PlayList_Fragment extends Fragment {
                 });
 
                 mediaPlayer.setOnErrorListener((mp, what, extra) -> {
-                    Toast.makeText(getContext(), "Playback Error", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(getContext(), getString(R.string.playback_error), Toast.LENGTH_SHORT).show();
                     return true;
                 });
 
@@ -378,7 +408,7 @@ public class PlayList_Fragment extends Fragment {
                 applyLoopMode(false);
             }
         } catch (Exception e) {
-            Toast.makeText(getContext(), "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            Toast.makeText(getContext(), getString(R.string.error_message, e.getMessage()), Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -505,7 +535,7 @@ public class PlayList_Fragment extends Fragment {
 
     public String createTime(int ms) {
         int sec = ms / 1000;
-        return String.format(Locale.US, "%d:%02d", sec / 60, sec % 60);
+        return getString(R.string.time_format, sec / 60, sec % 60);
     }
 
     public static PlayList_Fragment newInstance(String value1, String value2){
@@ -578,10 +608,14 @@ public class PlayList_Fragment extends Fragment {
                     textSeek1.setText(createTime(progress));
                 }
             }
-            @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {}
-            @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {}
+            @Override public void onStartTrackingTouch(SeekBar seekBar) {
+                //textSeek1.setText(createTime(seekBar.getProgress()));
+//                seekBar.setProgressDrawable(AppCompatResources.getDrawable(getApplicationContext(), R.drawable.rec_drw_seekprogress));
+//                seekBar.setThumb(AppCompatResources.getDrawable(getApplicationContext(), R.drawable.rec_drw_seek_thumb));
+            }
+            @Override public void onStopTrackingTouch(SeekBar seekBar) {
+               // textSeek1.setText(createTime(seekBar.getProgress()));
+            }
         });
 
         loopButton.setOnClickListener(v -> {

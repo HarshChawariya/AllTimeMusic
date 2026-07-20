@@ -12,4 +12,13 @@
     <string name="lyrics_will_be_appearing">Lyrics will be appearing....</string>
     <string name="radhakrishna">RadhaKrishna</string>
     <string name="options_menu">options menu</string>
+    <string name="added_to_favorite">Added To Favourite</string>
+    <string name="removed_from_favorite">Removed From Favourite</string>
+    <string name="loop_off">Loop Off</string>
+    <string name="single_loop">Single Loop</string>
+    <string name="playlist_loop">Playlist Loop</string>
+    <string name="shuffle_on">Shuffle On</string>
+    <string name="playback_error">Playback Error</string>
+    <string name="error_message">Error: %1$s</string>
+    <string name="time_format">%1$d:%2$02d</string>
 </resources>
