@@ -132,8 +132,8 @@ public class FavoritesDatabase extends SQLiteOpenHelper {
             db.insertWithOnConflict(TABLE_FAVORITES, null, values, SQLiteDatabase.CONFLICT_REPLACE);
         }
 
+        song.isFavourite = true;
         if (!isFavorite(song.songPath)) {
-            song.isFavourite = true;
             favoriteList.add(song);
         }
     }
