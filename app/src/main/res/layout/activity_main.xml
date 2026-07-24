@@ -46,7 +46,7 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
-        android:background="@drawable/rec_draw"
+        android:background="#9D201A"
         android:visibility="gone"
         android:clickable="true"
         android:focusable="true">
@@ -56,7 +56,7 @@
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
             android:gravity="center_vertical"
-            android:background="#9D201A">
+            android:background="@android:color/transparent">
             <!--must be @android:color/transparent-->
             <ImageView
                 android:id="@+id/img_back_arrow"

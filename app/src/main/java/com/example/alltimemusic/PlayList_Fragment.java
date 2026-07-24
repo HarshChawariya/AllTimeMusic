@@ -238,6 +238,18 @@ public class PlayList_Fragment extends Fragment {
             applyLoopMode(false);
         }
     }
+    /**
+     * Updates internal views when a new color is received from MainActivity.
+     * Fragment root is now transparent, relying on MainActivity container background.
+     */
+    public void updateInternalColors(int color) {
+        if (getActivity() == null) return;
+        getActivity().runOnUiThread(() -> {
+            // Internal view updates can go here if needed (e.g. dynamic text/icon tinting)
+            // But root background logic is removed to avoid redundancy.
+        });
+    }
+
     private void updateProfileImage(ShapeableImageView profile_imageView, musicList_Structure song) {
         if (profile_imageView == null || song == null) return;
 
@@ -256,14 +268,6 @@ public class PlayList_Fragment extends Fragment {
                     public void onResourceReady(@NonNull Bitmap resource, @Nullable com.bumptech.glide.request.transition.Transition<? super Bitmap> transition) {
                         profile_imageView.setImageBitmap(resource);
 
-                        // Extract dominant color for Spotify-like gradient
-                        /*Palette.from(resource).generate(palette -> {
-                            if (palette != null) {
-                                int dominantColor = palette.getVibrantColor(palette.getDominantColor(0xFF9D201A));
-                                updateBackgroundGradient(dominantColor);
-                            }
-                        });*/
-
                         ViewGroup.LayoutParams params = profile_imageView.getLayoutParams();
                         params.width = ViewGroup.LayoutParams.MATCH_PARENT;
                         params.height = ViewGroup.LayoutParams.MATCH_PARENT;
@@ -278,23 +282,9 @@ public class PlayList_Fragment extends Fragment {
                     @Override
                     public void onLoadFailed(@Nullable android.graphics.drawable.Drawable errorDrawable) {
                         setDefaultProfileImage(profile_imageView);
-                        //updateBackgroundGradient(0xFF9D201A);
                     }
                 });
     }
-
-    /*private void updateBackgroundGradient(int startColor) {
-        if (rootLayout == null) return;
-
-        // Dynamic gradient mimic of rec_draw.xml
-        GradientDrawable gd = new GradientDrawable(
-                GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[] {startColor, 0xFF000000} // Dynamic Start to Black End
-        );
-        gd.setCornerRadius(0f);
-        rootLayout.setBackground(gd);
-    }*/
-
     private void setDefaultProfileImage(ShapeableImageView profile_imageView) {
         profile_imageView.setImageResource(R.drawable.profile);
 

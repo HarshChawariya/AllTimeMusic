@@ -3,7 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#9D201A"
+    android:background="@android:color/transparent"
     android:orientation="vertical"
     tools:context=".Lyrics_Fragment">
 
@@ -92,6 +92,7 @@
         <!-- Overlays must be last to be on top -->
         <!-- Top Fade Overlay -->
         <View
+            android:id="@+id/lyrics_top_fade_view"
             android:layout_width="match_parent"
             android:layout_height="150dp"
             android:layout_alignParentTop="true"
@@ -101,6 +102,7 @@
 
         <!-- Bottom Fade Overlay -->
         <View
+            android:id="@+id/lyrics_bottom_fade_view"
             android:layout_width="match_parent"
             android:layout_height="150dp"
             android:layout_alignParentBottom="true"
