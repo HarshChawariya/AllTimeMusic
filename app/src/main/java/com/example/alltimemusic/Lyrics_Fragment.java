@@ -118,8 +118,7 @@ public class Lyrics_Fragment extends Fragment {
     }
 
     @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup container,
-                             Bundle savedInstanceState) {
+    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         // Inflate the layout for this fragment
         View view = inflater.inflate(R.layout.fragment_lyrics_, container, false);
 
@@ -448,7 +447,7 @@ public class Lyrics_Fragment extends Fragment {
 
                                 // IMPORTANT: Save using the path this request was intended for
                                 FavoritesDatabase db = new FavoritesDatabase(getContext());
-                                db.saveLyrics(targetSongPath, finalPlain, finalSynced + "fetchLyricsOnline()");
+                                db.saveLyrics(targetSongPath, finalPlain, finalSynced);
 
                                 // Update UI ONLY if this is still the active song
                                 if (targetSongPath.equals(lastLoadedSongId)) {
@@ -512,7 +511,7 @@ public class Lyrics_Fragment extends Fragment {
 
                             // Save to correct path
                             FavoritesDatabase db = new FavoritesDatabase(getContext());
-                            db.saveLyrics(targetSongPath, finalPlain, finalSynced + "fetchLyricsByTitleOnly()");
+                            db.saveLyrics(targetSongPath, finalPlain, finalSynced);
 
                             if (targetSongPath.equals(lastLoadedSongId)) {
                                 currentSyncedLyrics = finalSynced;

@@ -539,6 +539,7 @@ public class PlayList_Fragment extends Fragment {
 
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+        // Inflate the layout for this fragment
         View view = inflater.inflate(R.layout.fragment_play_list_, container, false);
         textSeek1 = view.findViewById(R.id.textSeek1);
         textSeek2 = view.findViewById(R.id.textSeek2);

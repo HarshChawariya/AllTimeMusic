@@ -94,9 +94,8 @@
         <View
             android:id="@+id/lyrics_top_fade_view"
             android:layout_width="match_parent"
-            android:layout_height="150dp"
+            android:layout_height="20dp"
             android:layout_alignParentTop="true"
-            android:background="@drawable/lyrics_top_fade"
             android:clickable="false"
             android:focusable="false" />
 
@@ -104,9 +103,8 @@
         <View
             android:id="@+id/lyrics_bottom_fade_view"
             android:layout_width="match_parent"
-            android:layout_height="150dp"
+            android:layout_height="20dp"
             android:layout_alignParentBottom="true"
-            android:background="@drawable/lyrics_bottom_fade"
             android:clickable="false"
             android:focusable="false" />
 
