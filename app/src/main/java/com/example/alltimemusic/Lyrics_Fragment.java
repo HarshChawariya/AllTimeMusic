@@ -16,6 +16,7 @@ import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -47,7 +48,8 @@ public class Lyrics_Fragment extends Fragment {
     private ImageView miniPause;
     private ShapeableImageView miniProfile;
     private ProgressBar miniProgressBar;
-    private View plainLyricsScroll;
+    private View  topFadeView, bottomFadeView;
+    private ScrollView plainLyricsScroll;
     private RecyclerView lyricsRecycler;
     private LyricsAdapter lyricsAdapter;
     private List<LyricLine> lyricLines = new ArrayList<>();
@@ -116,8 +118,7 @@ public class Lyrics_Fragment extends Fragment {
     }
 
     @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup container,
-                             Bundle savedInstanceState) {
+    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         // Inflate the layout for this fragment
         View view = inflater.inflate(R.layout.fragment_lyrics_, container, false);
 
@@ -126,6 +127,8 @@ public class Lyrics_Fragment extends Fragment {
         lyricsTxt = view.findViewById(R.id.lyrics_txt);
         plainLyricsScroll = view.findViewById(R.id.plain_lyrics_scroll);
         lyricsRecycler = view.findViewById(R.id.lyrics_recycler);
+        topFadeView = view.findViewById(R.id.lyrics_top_fade_view);
+        bottomFadeView = view.findViewById(R.id.lyrics_bottom_fade_view);
         
         lyricsAdapter = new LyricsAdapter();
         lyricsAdapter.setOnLyricClickListener(timeMs -> {
@@ -160,6 +163,10 @@ public class Lyrics_Fragment extends Fragment {
         song_name.setText(mParam1);
         artist_name.setText(mParam2);
         lyricsTxt.setText(mParam3);
+        
+        // BUG FIX: Immediately sync fades with the current global dynamic color on view creation
+        updateInternalColors(MainActivity.lastDynamicColor);
+
         updateMiniPlayerUI();
 
         miniPause.setOnClickListener(v -> {
@@ -197,6 +204,9 @@ public class Lyrics_Fragment extends Fragment {
             // Display the smart cleaned artist
             String displayArtist = current.getCleanArtist();
             artist_name.setText(displayArtist);
+
+            // BUG FIX: Ensure fades are synced even if the fragment was already created
+            updateInternalColors(MainActivity.lastDynamicColor);
 
             //Display the cover art
             updateProfileImage(miniProfile, current);
@@ -242,6 +252,33 @@ public class Lyrics_Fragment extends Fragment {
                 startProgressUpdate();
             }
         }
+    }
+
+    /**
+     * Called from MainActivity when a new color is extracted.
+     * Updates internal views like Fades and backgrounds to maintain sync.
+     */
+    public void updateInternalColors(int color) {
+        if (getActivity() == null) return;
+        getActivity().runOnUiThread(() -> {
+            // Update Top Fade with dynamic gradient
+            if (topFadeView != null) {
+                android.graphics.drawable.GradientDrawable topGd = new android.graphics.drawable.GradientDrawable(
+                        android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+                        new int[] {color, android.graphics.Color.TRANSPARENT}
+                );
+                topFadeView.setBackground(topGd);
+            }
+            // Update Bottom Fade with dynamic gradient
+            if (bottomFadeView != null) {
+                android.graphics.drawable.GradientDrawable bottomGd = new android.graphics.drawable.GradientDrawable(
+                        android.graphics.drawable.GradientDrawable.Orientation.BOTTOM_TOP,
+                        new int[] {color, android.graphics.Color.TRANSPARENT}
+                );
+                bottomFadeView.setBackground(bottomGd);
+            }
+            // Roots are handled by MainActivity for simplicity
+        });
     }
 
     private void updateProfileImage(ShapeableImageView profile_imageView, musicList_Structure song) {
@@ -388,7 +425,7 @@ public class Lyrics_Fragment extends Fragment {
                                 if (!synced.isEmpty() && !synced.equalsIgnoreCase("null")) {
                                     tempSynced = synced;
                                     tempPlain = obj.optString("plainLyrics", "");
-                                    Log.d("LRCLIB_SYNC", "Found Synced Lyrics: " + tempSynced);
+                                    Log.d("Lyrics_Fragment Method fetchLyricsOnline()", "Found Synced Lyrics: " + tempSynced);
                                     break;
                                 }
                             }
@@ -465,6 +502,8 @@ public class Lyrics_Fragment extends Fragment {
                             JSONObject obj = array.getJSONObject(0);
                             String synced = obj.optString("syncedLyrics", "");
                             String plain = obj.optString("plainLyrics", "");
+
+                            Log.d("Lyrics_Fragment Method fetchLyricsByTitleOnly()", "Found Synced Lyrics: " + synced);
 
                             // Clean up "null" strings before saving
                             String finalPlain = plain.equalsIgnoreCase("null") ? "" : plain;

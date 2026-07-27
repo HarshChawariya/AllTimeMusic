@@ -10,7 +10,6 @@ import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Color;
 import android.graphics.Typeface;
-import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.content.Context;
 import android.net.ConnectivityManager;
@@ -60,6 +59,7 @@ public class MainActivity extends AppCompatActivity {
     private ConnectivityManager connectivityManager;
     private ConnectivityManager.NetworkCallback networkCallback;
 
+    public static int lastDynamicColor = 0xFF9D201A;
     private TextView tabItem1, tabItem2;
     private View indicator;
     private ViewPager2 viewPager;
@@ -224,6 +224,12 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        
+        // BUG FIX: Reset Status Bar to Red if main list is visible
+        if (musicList_LinLayOut.getVisibility() == GONE) {
+            getWindow().setStatusBarColor(Color.parseColor("#9D201A"));
+        }
+
         if (musicList != null && !musicList.isEmpty()) {
             new FavoritesDatabase(this);
             for (musicList_Structure song : musicList) {
@@ -243,11 +249,30 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void handleBackAction() {
+        // Feature: Animate Status Bar transition back to default color (300ms fade)
+        animateStatusBarColor(Color.parseColor("#9D201A"));
+        
         closePlayerLayout();
         updateMiniPlayer();
+
         if (recyclerView.getAdapter() != null) {
             recyclerView.getAdapter().notifyDataSetChanged();
         }
+    }
+
+    /**
+     * Animates the status bar color from its current state to a target color.
+     * Synchronized with fragment exit animations for a premium feel.
+     */
+    private void animateStatusBarColor(int toColor) {
+        int fromColor = getWindow().getStatusBarColor();
+        android.animation.ValueAnimator colorAnimation = android.animation.ValueAnimator.ofObject(
+                new android.animation.ArgbEvaluator(), fromColor, toColor);
+        colorAnimation.setDuration(300); // 300ms duration as requested
+        colorAnimation.addUpdateListener(animator -> {
+            getWindow().setStatusBarColor((int) animator.getAnimatedValue());
+        });
+        colorAnimation.start();
     }
 
     private void toggleMusic() {
@@ -318,13 +343,45 @@ public class MainActivity extends AppCompatActivity {
                     @Override
                     public void onResourceReady(@NonNull android.graphics.drawable.Drawable resource, @androidx.annotation.Nullable com.bumptech.glide.request.transition.Transition<? super android.graphics.drawable.Drawable> transition) {
                         miniProfile.setImageDrawable(resource);
-                        // Extract dominant color for Spotify-like gradient
-                        /*Palette.from(resource).generate(palette -> {
-                                    if (palette != null) {
-                                        int dominantColor = palette.getVibrantColor(palette.getDominantColor(0xFF9D201A));
-                                        TabLayout_LinearLayout.setBackgroundColor(dominantColor);
-                                    }
-                                });*/
+
+                        // Centralized Color Extraction logic moved to MainActivity for better sync
+                        if (resource instanceof android.graphics.drawable.BitmapDrawable) {
+                            android.graphics.Bitmap bitmap = ((android.graphics.drawable.BitmapDrawable) resource).getBitmap();
+                            if (bitmap != null) {
+                                int width = bitmap.getWidth();
+                                int height = bitmap.getHeight();
+
+                                // Focus on the center area to extract "Mood" colors like Spotify
+                                Palette.from(bitmap)
+                                    .setRegion(width/4, height/4, (3*width)/4, (3*height)/4)
+                                    .generate(palette -> {
+                                        if (palette != null) {
+                                            int defaultValue = 0xFF9D201A;
+                                            
+                                            // Priority selection for the most atmospheric color
+                                            androidx.palette.graphics.Palette.Swatch bestSwatch = palette.getVibrantSwatch();
+                                            if (bestSwatch == null) bestSwatch = palette.getDominantSwatch();
+                                            if (bestSwatch == null) bestSwatch = palette.getDarkVibrantSwatch();
+
+                                            int targetColor = (bestSwatch != null) ? bestSwatch.getRgb() : defaultValue;
+
+                                            // HSV Post-processing: Boosting vibrance like Spotify "Mood" backgrounds
+                                            float[] hsv = new float[3];
+                                            Color.colorToHSV(targetColor, hsv);
+                                            
+                                            // Increase saturation for a more vivid look (1.3x boost)
+                                            hsv[1] = Math.min(hsv[1] * 1.3f, 0.85f); 
+                                            // Adjust brightness range for a deeper but more "glowy" effect
+                                            hsv[2] = Math.max(Math.min(hsv[2], 0.45f), 0.18f);
+
+                                            int finalColor = Color.HSVToColor(hsv);
+                                            applyDynamicColorsToUI(finalColor);
+                                        }
+                                    });
+                            }
+                        }
+/*hsv[1] = Math.min(hsv[1] * 1.1f, 0.75f);
+hsv[2] = Math.max(Math.min(hsv[2], 0.35f), 0.15f);*/
                         ViewGroup.LayoutParams params = miniProfile.getLayoutParams();
                         params.width = ViewGroup.LayoutParams.MATCH_PARENT;
                         params.height = ViewGroup.LayoutParams.MATCH_PARENT;
@@ -340,9 +397,40 @@ public class MainActivity extends AppCompatActivity {
                     public void onLoadFailed(@androidx.annotation.Nullable android.graphics.drawable.Drawable errorDrawable) {
                         miniProfile.setImageDrawable(errorDrawable);
                         setDefaultMiniProfile();
-                       // TabLayout_LinearLayout.setBackgroundColor(0xFF9D201A);
+                        
+                        // Set Default Theme Color if album art is missing
+                        applyDynamicColorsToUI(Color.parseColor("#9D201A"));
                     }
                 });
+    }
+
+    /**
+     * Applies the extracted color to the main container and all active fragments.
+     * This ensures a perfectly synced UI across the entire Player screen.
+     */
+    private void applyDynamicColorsToUI(int color) {
+        lastDynamicColor = color;
+
+        // 1. Update the main fragment container background (Top layer of the app)
+        if (musicList_LinLayOut != null) {
+            musicList_LinLayOut.setBackgroundColor(color);
+        }
+
+        // 2. Sync Status Bar based on visibility
+        if (TabLayout_LinearLayout != null) {
+            if (mainLayout.getVisibility() == GONE) {
+                getWindow().setStatusBarColor(color);
+            }
+        }
+
+        // 3. Notify active fragments to update their internal views dynamically
+        for (Fragment fragment : getSupportFragmentManager().getFragments()) {
+            if (fragment instanceof Lyrics_Fragment) {
+                ((Lyrics_Fragment) fragment).updateInternalColors(color);
+            } else if (fragment instanceof PlayList_Fragment) {
+                ((PlayList_Fragment) fragment).updateInternalColors(color);
+            }
+        }
     }
 
     private void setDefaultMiniProfile() {
@@ -429,6 +517,10 @@ public class MainActivity extends AppCompatActivity {
         if (miniPlayer != null) miniPlayer.setVisibility(GONE);
         mainLayout.setVisibility(GONE);
         musicList_LinLayOut.setVisibility(VISIBLE);
+        
+        // Sync immediate background color when player opens
+        applyDynamicColorsToUI(lastDynamicColor);
+
         displayTabLayOut();
 
         for (Fragment fragment : getSupportFragmentManager().getFragments()) {

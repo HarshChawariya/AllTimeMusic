@@ -3,7 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#9D201A"
+    android:background="@android:color/transparent"
     android:orientation="vertical"
     tools:context=".Lyrics_Fragment">
 
@@ -46,19 +46,20 @@
     <RelativeLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1">
+        android:layout_weight="1"
+        android:layout_marginTop="10dp">
 
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/lyrics_recycler"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
+            android:clipToPadding="false"
             android:overScrollMode="never"
-            android:scrollbars="none"
-            android:paddingTop="150dp"
-            android:paddingBottom="300dp"
             android:paddingStart="10dp"
+            android:paddingTop="150dp"
             android:paddingEnd="50dp"
-            android:clipToPadding="false"/>
+            android:paddingBottom="300dp"
+            android:scrollbars="none" />
 
         <ScrollView
             android:id="@+id/plain_lyrics_scroll"
@@ -92,22 +93,25 @@
         <!-- Overlays must be last to be on top -->
         <!-- Top Fade Overlay -->
         <View
+            android:id="@+id/lyrics_top_fade_view"
             android:layout_width="match_parent"
-            android:layout_height="150dp"
+            android:layout_height="20dp"
             android:layout_alignParentTop="true"
-            android:background="@drawable/lyrics_top_fade"
             android:clickable="false"
             android:focusable="false" />
 
         <!-- Bottom Fade Overlay -->
         <View
+            android:id="@+id/lyrics_bottom_fade_view"
             android:layout_width="match_parent"
-            android:layout_height="150dp"
+            android:layout_height="20dp"
             android:layout_alignParentBottom="true"
-            android:background="@drawable/lyrics_bottom_fade"
             android:clickable="false"
             android:focusable="false" />
 
     </RelativeLayout>
-    <include layout="@layout/dialog_res"/>
+    <include layout="@layout/dialog_res"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="20dp"/>
 </LinearLayout>
