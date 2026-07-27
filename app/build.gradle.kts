@@ -4,12 +4,12 @@ plugins {
 
 android {
     namespace = "com.example.alltimemusic"
-    compileSdk = 36
+    compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {
         applicationId = "com.example.alltimemusic"
-        minSdk = 25
-        targetSdk = 36
+        minSdk = libs.versions.minSdk.get().toInt()
+        targetSdk = libs.versions.targetSdk.get().toInt()
         versionCode = 1
         versionName = "1.0"
 
@@ -37,7 +37,7 @@ dependencies {
     implementation(libs.activity)
     implementation(libs.constraintlayout)
     implementation(libs.recyclerview)
-    implementation("com.airbnb.android:lottie:6.7.1")
+    implementation(libs.lottie)
     implementation(libs.viewpager2)
     implementation(libs.okhttp)
     implementation(libs.glide)
