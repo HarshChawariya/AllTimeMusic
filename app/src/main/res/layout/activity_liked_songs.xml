@@ -31,20 +31,42 @@
             android:textStyle="bold" />
     </LinearLayout>
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/liked_recycler"
+    <RelativeLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:padding="8dp"
-        android:overScrollMode="never"
-        android:clipToPadding="false"
-        android:requiresFadingEdge="vertical"
-        android:fadingEdgeLength="100dp"
-        app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
+        android:layout_weight="1">
 
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/liked_recycler"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:overScrollMode="never"
+            android:paddingBottom="70dp"
+            android:clipToPadding="false" />
+
+        <!-- Top Fade Overlay -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="20dp"
+            android:background="@drawable/liked_top_fade"
+            android:layout_alignParentTop="true"
+            android:clickable="false"
+            android:focusable="false" />
+
+        <!-- Bottom Fade Overlay -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="20dp"
+            android:background="@drawable/lyrics_bottom_fade"
+            android:layout_alignParentBottom="true"
+            android:clickable="false"
+            android:focusable="false" />
+    </RelativeLayout>
     <include
         android:id="@+id/miniPlayer"
         layout="@layout/dialog_res"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="20dp"
         android:visibility="gone" />
 </LinearLayout>

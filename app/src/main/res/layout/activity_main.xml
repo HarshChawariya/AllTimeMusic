@@ -26,18 +26,46 @@
             android:text=""
             android:textColor="@color/white"/>
 
-        <!-- RecyclerView should not be inside a ScrollView for better performance -->
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/recycler"
+        <RelativeLayout
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="1"
-            android:overScrollMode="never" />
+            android:layout_weight="1">
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/recycler"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:overScrollMode="never"
+                android:paddingBottom="70dp"
+                android:clipToPadding="false" />
+
+            <!-- Top Fade Overlay -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="20dp"
+                android:background="@drawable/lyrics_top_fade"
+                android:layout_alignParentTop="true"
+                android:clickable="false"
+                android:focusable="false" />
+
+            <!-- Bottom Fade Overlay -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="20dp"
+                android:background="@drawable/lyrics_bottom_fade"
+                android:layout_alignParentBottom="true"
+                android:clickable="false"
+                android:focusable="false" />
+        </RelativeLayout>
 
         <include
             android:id="@+id/miniPlayer"
             layout="@layout/dialog_res"
-            android:visibility="gone" />
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:visibility="gone"
+            android:layout_marginBottom="20dp"/>
+
     </LinearLayout>
 
     <!-- Top Layer: Player / Custom TabLayout -->
