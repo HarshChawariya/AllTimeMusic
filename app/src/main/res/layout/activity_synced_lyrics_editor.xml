@@ -23,13 +23,22 @@
             app:tint="@color/white" />
 
         <TextView
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="24dp"
+            android:layout_weight="1"
             android:text="Synced Lyrics Editor"
             android:textColor="@color/white"
             android:textSize="20sp"
             android:textStyle="bold" />
+
+        <ImageView
+            android:id="@+id/editor_options_menu"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:src="@drawable/three_dot"
+            app:tint="@color/white"
+            android:padding="4dp" />
     </LinearLayout>
 
     <!-- Waveform Visualizer Section -->
@@ -46,10 +55,12 @@
 
         <!-- Center Line Indicator -->
         <View
+            android:id="@+id/center_line_indicator"
             android:layout_width="2dp"
             android:layout_height="match_parent"
             android:layout_gravity="center_horizontal"
-            android:background="#FF0000" />
+            android:background="#FF0000"
+            android:visibility="gone" />
 
         <!-- Loading Overlay -->
         <LinearLayout
@@ -106,12 +117,37 @@
             android:textSize="16sp"
             android:visibility="gone"/>
 
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/lyrics_edit_recycler"
+        <RelativeLayout
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:layout_marginTop="10dp"
-            android:overScrollMode="never" />
+            android:layout_marginTop="10dp">
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/lyrics_edit_recycler"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:overScrollMode="never"
+                android:clipToPadding="false"
+                android:paddingTop="100dp"
+                android:paddingBottom="100dp" />
+
+            <!-- Overlays -->
+            <View
+                android:id="@+id/editor_top_fade"
+                android:layout_width="match_parent"
+                android:layout_height="20dp"
+                android:layout_alignParentTop="true"
+                android:clickable="false"
+                android:focusable="false" />
+
+            <View
+                android:id="@+id/editor_bottom_fade"
+                android:layout_width="match_parent"
+                android:layout_height="20dp"
+                android:layout_alignParentBottom="true"
+                android:clickable="false"
+                android:focusable="false" />
+        </RelativeLayout>
     </LinearLayout>
 
     <!-- Controls Section -->
@@ -204,7 +240,7 @@
                 android:id="@+id/btn_preview_lyrics"
                 android:layout_width="40dp"
                 android:layout_height="40dp"
-                android:src="@drawable/play"
+                android:src="@drawable/preview"
                 app:tint="@color/white"
                 android:layout_marginStart="10dp"
                 android:contentDescription="Preview" />
