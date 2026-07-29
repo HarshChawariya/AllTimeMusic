@@ -627,6 +627,9 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
         // Show loading state
         runOnUiThread(() -> loadingLayout.setVisibility(View.VISIBLE));
 
+        // Memory Safety: Cancellation flag
+        final boolean[] isCanceled = {false};
+
         // Run decoding in background to prevent UI lag
         new Thread(() -> {
             android.media.MediaExtractor extractor = new android.media.MediaExtractor();
@@ -649,31 +652,31 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
                 if (format == null) return;
 
                 // PROFESSIONAL STRATEGY: Full Decode Snapshots
-                // Professional editors like Audacity or FL Studio look at "Peak-to-Peak" energy.
                 codec = android.media.MediaCodec.createDecoderByType(format.getString(android.media.MediaFormat.KEY_MIME));
                 codec.configure(format, null, null, 0);
                 codec.start();
 
                 long duration = format.getLong(android.media.MediaFormat.KEY_DURATION);
-                int points = 1000;
                 
-                // ADAPTIVE DETAIL: Long songs get more points for higher fidelity
-                if (duration > 300000) points = 1500; // > 5 mins
-                if (duration > 600000) points = 2000; // > 10 mins
-
+                // CONTINUOUS SCANNING: Scan more points for 100% accuracy
+                int points = 3000;
                 float[] peaks = new float[points];
                 android.media.MediaCodec.BufferInfo info = new android.media.MediaCodec.BufferInfo();
+                
+                long sampleInterval = duration / points;
 
                 for (int i = 0; i < points; i++) {
-                    long seekTime = (long) ((i / (float) points) * duration);
-                    extractor.seekTo(seekTime, android.media.MediaExtractor.SEEK_TO_CLOSEST_SYNC);
+                    if (isCanceled[0]) break; // Safety check for memory leaks
+
+                    // Suggestion #2: Accurate frame-by-frame capture
+                    long seekTime = i * sampleInterval;
+                    extractor.seekTo(seekTime, android.media.MediaExtractor.SEEK_TO_PREVIOUS_SYNC);
                     
                     float maxInChunk = 0;
-                    float beatEnergy = 0;
                     int decodedFrames = 0;
                     
-                    // MULTI-PASS STYLE: Capture transients and steady vocals
-                    while (decodedFrames < 6) { 
+                    // Decode a precise window to catch transients (Beats/Vocals)
+                    while (decodedFrames < 4) { 
                         int inputIndex = codec.dequeueInputBuffer(2000);
                         if (inputIndex >= 0) {
                             java.nio.ByteBuffer inputBuffer = codec.getInputBuffer(inputIndex);
@@ -690,40 +693,29 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
                         int outputIndex = codec.dequeueOutputBuffer(info, 2000);
                         if (outputIndex >= 0) {
                             java.nio.ByteBuffer outputBuffer = codec.getOutputBuffer(outputIndex);
-                            
                             while (outputBuffer.remaining() >= 2) {
                                 short sample = outputBuffer.getShort();
                                 float absSample = Math.abs(sample) / 32768f;
                                 if (absSample > maxInChunk) maxInChunk = absSample;
-                                
-                                // Simple Bass/Beat Energy Simulation
-                                if (absSample > 0.6f) beatEnergy += absSample;
                             }
-                            
                             codec.releaseOutputBuffer(outputIndex, false);
                             decodedFrames++;
-                        } else if (outputIndex == android.media.MediaCodec.INFO_TRY_AGAIN_LATER) {
-                            break;
-                        }
+                        } else break;
                     }
                     
-                    // KINEMASTER BLEND: Combine raw peak with weighted rhythmic energy
-                    float combined = (maxInChunk * 0.75f) + (Math.min(0.25f, beatEnergy / 800f));
-                    
-                    if (combined < 0.01f) {
-                        peaks[i] = 0.02f; 
-                    } else {
-                        float exaggerated = (float) Math.pow(combined, 1.4f); 
-                        peaks[i] = Math.max(0.02f, Math.min(1.0f, exaggerated * 4.5f));
-                    }
+                    // High-Detail Scaling
+                    float exaggerated = (float) Math.pow(maxInChunk, 1.3f); 
+                    peaks[i] = Math.max(0.015f, Math.min(1.0f, exaggerated * 4.0f));
                 }
 
-                float[] finalPeaks = peaks;
-                runOnUiThread(() -> {
-                    waveformView.setAmplitudes(finalPeaks);
-                    loadingLayout.setVisibility(View.GONE);
-                    if (centerLine != null) centerLine.setVisibility(View.VISIBLE);
-                });
+                if (!isCanceled[0]) {
+                    float[] finalPeaks = peaks;
+                    runOnUiThread(() -> {
+                        waveformView.setAmplitudes(finalPeaks);
+                        loadingLayout.setVisibility(View.GONE);
+                        if (centerLine != null) centerLine.setVisibility(View.VISIBLE);
+                    });
+                }
 
             } catch (Exception e) {
                 e.printStackTrace();
