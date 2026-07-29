@@ -36,6 +36,11 @@
             android:exported="true"
             android:theme="@style/MainActivity.Theme.AllTimeMusic"/>
 
+        <activity android:name=".SyncedLyricsEditorActivity"
+            android:exported="false"
+            android:label="Synced Lyrics Editor"
+            android:theme="@style/MainActivity.Theme.AllTimeMusic"/>
+
         <activity android:name=".LikedSongsActivity"
             android:exported="false"
             android:label="Liked Song"/>

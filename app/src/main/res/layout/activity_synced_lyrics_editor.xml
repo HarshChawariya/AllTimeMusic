@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:id="@+id/editor_root"
+    android:background="@drawable/rec_draw"
+    android:orientation="vertical">
+
+    <!-- Toolbar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:gravity="center_vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp">
+
+        <ImageView
+            android:id="@+id/back_btn_editor"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@drawable/arrow_back_ios_new_24"
+            app:tint="@color/white" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="24dp"
+            android:text="Synced Lyrics Editor"
+            android:textColor="@color/white"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- Waveform Visualizer Section -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="120dp"
+        android:layout_marginTop="10dp"
+        android:background="#33000000">
+
+        <com.example.alltimemusic.WaveformView
+            android:id="@+id/waveform_view"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <!-- Center Line Indicator -->
+        <View
+            android:layout_width="2dp"
+            android:layout_height="match_parent"
+            android:layout_gravity="center_horizontal"
+            android:background="#FF0000" />
+
+        <!-- Loading Overlay -->
+        <LinearLayout
+            android:id="@+id/waveform_loading_layout"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:visibility="visible">
+
+            <ProgressBar
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:indeterminateTint="@color/white" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="Loading..."
+                android:textColor="@color/white"
+                android:textSize="12sp" />
+        </LinearLayout>
+    </FrameLayout>
+
+    <!-- Lyrics Display Area -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:id="@+id/current_line_display"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="Select a line to start syncing"
+            android:textColor="@color/white"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="10dp"/>
+
+        <EditText
+            android:id="@+id/line_edit_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/round_back_white10_100"
+            android:padding="12dp"
+            android:textColor="@color/white"
+            android:hint="Edit current line..."
+            android:textColorHint="#99FFFFFF"
+            android:textSize="16sp"
+            android:visibility="gone"/>
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/lyrics_edit_recycler"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_marginTop="10dp"
+            android:overScrollMode="never" />
+    </LinearLayout>
+
+    <!-- Controls Section -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:background="#22000000">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/editor_current_time"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="00:00"
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:layout_marginEnd="8dp"/>
+
+            <SeekBar
+                android:id="@+id/editor_seekbar"
+                android:layout_width="0dp"
+                android:layout_height="24dp"
+                android:layout_weight="1"
+                android:splitTrack="false"
+                android:minHeight="3dp"
+                android:maxHeight="3dp"
+                android:background="@null"
+                android:progressDrawable="@drawable/custom_seekbar_progress"
+                android:thumb="@drawable/custom_seekbar_thumb"/>
+
+            <TextView
+                android:id="@+id/editor_total_duration"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="00:00"
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:layout_marginStart="8dp"/>
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:layout_marginTop="10dp">
+
+            <ImageView
+                android:id="@+id/editor_play_pause"
+                android:layout_width="50dp"
+                android:layout_height="50dp"
+                android:src="@drawable/pause"
+                app:tint="@color/white"
+                android:layout_marginEnd="20dp"/>
+
+            <Button
+                android:id="@+id/btn_set_timestamp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Set Time Stamp"
+                android:backgroundTint="#9D201A"
+                android:textColor="@color/white"
+                android:padding="12dp" />
+
+            <ImageView
+                android:id="@+id/btn_preview_lyrics"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:src="@drawable/play"
+                app:tint="@color/white"
+                android:layout_marginStart="20dp"
+                android:contentDescription="Preview" />
+        </LinearLayout>
+
+        <Button
+            android:id="@+id/btn_save_synced"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Save All Changes"
+            android:backgroundTint="#4CAF50"
+            android:textColor="@color/white"
+            android:layout_marginTop="10dp"/>
+    </LinearLayout>
+
+</LinearLayout>

@@ -774,4 +774,21 @@ public class Lyrics_Fragment extends Fragment {
 
         bottomSheetDialog.show();
     }
+
+    public void openSyncedLyricsEditor() {
+        musicList_Structure current = musicList_Recycler_Adapter.currentItem;
+        if (current != null && getContext() != null) {
+            FavoritesDatabase db = new FavoritesDatabase(getContext());
+            String[] lyrics = db.getCachedLyrics(current.songPath);
+
+            // Rule #3: If plain lyrics are missing, open Add Lyrics dialog first
+            if (lyrics == null || lyrics[0] == null || lyrics[0].isEmpty()) {
+                showToast("Please add plain lyrics first");
+                openAddLyricsDialog();
+            } else {
+                android.content.Intent intent = new android.content.Intent(getContext(), SyncedLyricsEditorActivity.class);
+                startActivity(intent);
+            }
+        }
+    }
 }

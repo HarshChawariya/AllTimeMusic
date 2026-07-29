@@ -122,6 +122,7 @@ public class MainActivity extends AppCompatActivity {
             CustomPopupMenu popup = new CustomPopupMenu(this, v);
             popup.addMenuItem("Plain Lyrics");
             popup.addMenuItem("Synced Lyrics");
+            popup.addMenuItem("Synced Lyrics Editor");
             
             // Only show Add/Delete Lyrics if we are on the Lyrics tab (index 1)
             if (viewPager.getCurrentItem() == 1) {
@@ -167,6 +168,12 @@ public class MainActivity extends AppCompatActivity {
                     for (Fragment fragment : getSupportFragmentManager().getFragments()) {
                         if (fragment instanceof Lyrics_Fragment) {
                             ((Lyrics_Fragment) fragment).deleteLyricsFromDB();
+                        }
+                    }
+                } else if (title.equals("Synced Lyrics Editor")) {
+                    for (Fragment fragment : getSupportFragmentManager().getFragments()) {
+                        if (fragment instanceof Lyrics_Fragment) {
+                            ((Lyrics_Fragment) fragment).openSyncedLyricsEditor();
                         }
                     }
                 } else if (title.equals("Offline Mode") || title.equals("Online Mode")) {
