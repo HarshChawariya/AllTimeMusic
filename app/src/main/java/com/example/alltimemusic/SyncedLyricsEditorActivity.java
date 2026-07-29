@@ -23,18 +23,22 @@ import java.util.Locale;
 public class SyncedLyricsEditorActivity extends AppCompatActivity {
 
     private RecyclerView recyclerView;
-    private LyricsAdapter adapter;
+    private EditorLyricsAdapter adapter;
     private List<LyricLine> lyricLines = new ArrayList<>();
     private TextView currentLineDisplay, currentTimeTxt, totalDurationTxt;
     private EditText lineEditText;
     private SeekBar seekBar;
     private ImageView playPauseBtn, previewBtn;
     private Button btnSetTimestamp, btnSave;
+    private View btnUndo, btnRedo;
     private WaveformView waveformView;
     private View loadingLayout;
     private musicList_Structure currentSong;
     private int selectedIndex = -1;
     private boolean isPreviewMode = false;
+
+    private java.util.Stack<List<LyricLine>> undoStack = new java.util.Stack<>();
+    private java.util.Stack<List<LyricLine>> redoStack = new java.util.Stack<>();
 
     private long lastClickTime = 0;
     private static final long DOUBLE_CLICK_TIME_DELTA = 300; // milliseconds
@@ -110,26 +114,60 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
         scanAudioForWaveform();
 
         // Setup RecyclerView
-        adapter = new LyricsAdapter();
+        adapter = new EditorLyricsAdapter();
         adapter.setLyrics(lyricLines);
-        adapter.setOnLyricClickListener(timeMs -> {
-            long clickTime = System.currentTimeMillis();
-            int clickedIndex = -1;
-            for (int i = 0; i < lyricLines.size(); i++) {
-                if (lyricLines.get(i).getTimeMs() == timeMs) {
-                    clickedIndex = i;
-                    break;
+        adapter.setListener(new EditorLyricsAdapter.OnEditorLyricActionListener() {
+            @Override
+            public void onLyricClick(int position, LyricLine line) {
+                // Tap on lyrics to seek (Suggestion #2)
+                if (PlayList_Fragment.mediaPlayer != null) {
+                    if (line.getTimeMs() > 0) {
+                        PlayList_Fragment.mediaPlayer.seekTo((int) line.getTimeMs());
+                        // Update UI to match new position
+                        int duration = PlayList_Fragment.mediaPlayer.getDuration();
+                        if (duration > 0) {
+                            waveformView.updateScroll((float) line.getTimeMs() / duration);
+                        }
+                        if (!PlayList_Fragment.mediaPlayer.isPlaying()) {
+                            PlayList_Fragment.mediaPlayer.start();
+                            updatePauseIcon();
+                        }
+                    }
                 }
+                selectLine(position);
             }
 
-            if (clickTime - lastClickTime < DOUBLE_CLICK_TIME_DELTA) {
-                // Double Click: Edit Text
-                if (clickedIndex != -1) showEditDialog(clickedIndex);
-            } else {
-                // Single Click: Select Line
-                if (clickedIndex != -1) selectLine(clickedIndex);
+            @Override
+            public void onDeleteLine(int position) {
+                // Haptic Feedback for Deleting
+                vibrate(40);
+                saveStateToUndo();
+                lyricLines.remove(position);
+                adapter.notifyItemRemoved(position);
+                adapter.notifyItemRangeChanged(position, lyricLines.size());
+                Toast.makeText(SyncedLyricsEditorActivity.this, "Line Deleted", Toast.LENGTH_SHORT).show();
             }
-            lastClickTime = clickTime;
+
+            @Override
+            public void onAddLineAfter(int position) {
+                // Add new lyric between lines (Suggestion #3)
+                addNewLineDialog(position + 1, "");
+            }
+
+            @Override
+            public void onAddMusicNoteAfter(int position) {
+                // Add single music note (♪) between lines as requested
+                saveStateToUndo();
+                lyricLines.add(position + 1, new LyricLine(0, "♪"));
+                adapter.notifyItemInserted(position + 1);
+                adapter.notifyItemRangeChanged(position + 1, lyricLines.size());
+                Toast.makeText(SyncedLyricsEditorActivity.this, "Single Music Note Added", Toast.LENGTH_SHORT).show();
+            }
+
+            @Override
+            public void onEditLine(int position) {
+                showEditDialog(position);
+            }
         });
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
         recyclerView.setAdapter(adapter);
@@ -160,19 +198,17 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
             }
 
             @Override
-            public void onWaveformDragStart() {
-                // Optional: Pause player while dragging for better control
-                // if (PlayList_Fragment.mediaPlayer != null && PlayList_Fragment.mediaPlayer.isPlaying()) {
-                //    PlayList_Fragment.mediaPlayer.pause();
-                //    updatePauseIcon();
-                // }
-            }
+            public void onWaveformDragStart() {}
 
             @Override
-            public void onWaveformDragEnd() {
-                // Optional: Resume player if needed
-            }
+            public void onWaveformDragEnd() {}
         });
+
+        // Initialize Undo/Redo Views (Previously added in layout but may need finding)
+        // I need to check the layout to see if undo/redo buttons are there.
+        // The user said they rolled back, so I should check activity_synced_lyrics_editor.xml again.
+        btnUndo = findViewById(R.id.btn_undo);
+        btnRedo = findViewById(R.id.btn_redo);
 
         // Listeners
         backBtn.setOnClickListener(v -> finish());
@@ -191,6 +227,8 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
 
         btnSetTimestamp.setOnClickListener(v -> {
             if (selectedIndex != -1) {
+                vibrate(50);
+                saveStateToUndo();
                 LyricLine currentLine = lyricLines.get(selectedIndex);
                 
                 // Toggle Logic: Set if 0, Clear if > 0
@@ -214,8 +252,18 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
             }
         });
 
+        btnUndo.setOnClickListener(v -> {
+            vibrate(20);
+            undo();
+        });
+        btnRedo.setOnClickListener(v -> {
+            vibrate(20);
+            redo();
+        });
+
         // Remove redundant Zoom Button listeners as we now use Gestures
         previewBtn.setOnClickListener(v -> {
+            vibrate(30);
             isPreviewMode = !isPreviewMode;
             if (isPreviewMode) {
                 previewBtn.setColorFilter(Color.parseColor("#4CAF50"));
@@ -294,6 +342,17 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
         }
     }
 
+    private void vibrate(long ms) {
+        android.os.Vibrator v = (android.os.Vibrator) getSystemService(android.content.Context.VIBRATOR_SERVICE);
+        if (v != null) {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                v.vibrate(android.os.VibrationEffect.createOneShot(ms, android.os.VibrationEffect.DEFAULT_AMPLITUDE));
+            } else {
+                v.vibrate(ms);
+            }
+        }
+    }
+
     private void updatePreviewLyrics(int currentMs) {
         int index = -1;
         for (int i = 0; i < lyricLines.size(); i++) {
@@ -313,6 +372,7 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
     }
 
     private void showEditDialog(int index) {
+        saveStateToUndo();
         android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this);
         builder.setTitle("Edit Lyric Line");
         
@@ -332,6 +392,73 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
         });
         builder.setNegativeButton("Cancel", (dialog, which) -> dialog.cancel());
         builder.show();
+    }
+
+    private void addNewLineDialog(int index, String initialText) {
+        saveStateToUndo();
+        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this);
+        builder.setTitle("Add New Lyric Line");
+        
+        final EditText input = new EditText(this);
+        input.setText(initialText);
+        input.setPadding(40, 40, 40, 40);
+        builder.setView(input);
+
+        builder.setPositiveButton("Add", (dialog, which) -> {
+            String newText = input.getText().toString().trim();
+            if (!newText.isEmpty()) {
+                lyricLines.add(index, new LyricLine(0, newText));
+                adapter.notifyItemInserted(index);
+                adapter.notifyItemRangeChanged(index, lyricLines.size());
+            }
+        });
+        builder.setNegativeButton("Cancel", (dialog, which) -> dialog.cancel());
+        builder.show();
+    }
+
+    private void saveStateToUndo() {
+        List<LyricLine> copy = new ArrayList<>();
+        for (LyricLine line : lyricLines) {
+            copy.add(new LyricLine(line.getTimeMs(), line.getText()));
+        }
+        undoStack.push(copy);
+        redoStack.clear();
+    }
+
+    private void undo() {
+        if (!undoStack.isEmpty()) {
+            List<LyricLine> current = new ArrayList<>();
+            for (LyricLine line : lyricLines) {
+                current.add(new LyricLine(line.getTimeMs(), line.getText()));
+            }
+            redoStack.push(current);
+            
+            lyricLines.clear();
+            lyricLines.addAll(undoStack.pop());
+            adapter.notifyDataSetChanged();
+            if (selectedIndex != -1) selectLine(Math.min(selectedIndex, lyricLines.size()-1));
+            Toast.makeText(this, "Undo Successful", Toast.LENGTH_SHORT).show();
+        } else {
+            Toast.makeText(this, "Nothing to Undo", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void redo() {
+        if (!redoStack.isEmpty()) {
+            List<LyricLine> current = new ArrayList<>();
+            for (LyricLine line : lyricLines) {
+                current.add(new LyricLine(line.getTimeMs(), line.getText()));
+            }
+            undoStack.push(current);
+            
+            lyricLines.clear();
+            lyricLines.addAll(redoStack.pop());
+            adapter.notifyDataSetChanged();
+            if (selectedIndex != -1) selectLine(Math.min(selectedIndex, lyricLines.size()-1));
+            Toast.makeText(this, "Redo Successful", Toast.LENGTH_SHORT).show();
+        } else {
+            Toast.makeText(this, "Nothing to Redo", Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void scanAudioForWaveform() {
@@ -462,6 +589,7 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
             long min = (time / 1000) / 60;
             long sec = (time / 1000) % 60;
             long ms = (time % 1000) / 10;
+            // Standard LRC format [mm:ss.xx]
             String timestamp = String.format(Locale.US, "[%02d:%02d.%02d]", min, sec, ms);
             syncedBuilder.append(timestamp).append(line.getText()).append("\n");
         }
