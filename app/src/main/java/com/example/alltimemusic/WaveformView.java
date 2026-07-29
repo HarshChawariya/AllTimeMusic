@@ -13,6 +13,7 @@ import java.util.Random;
 
 public class WaveformView extends View {
     private Paint paint;
+    private android.graphics.Path wavePath;
     private float[] amplitudes = new float[0];
     private int width, height;
     private float scrollOffset = 0;
@@ -34,6 +35,9 @@ public class WaveformView extends View {
         paint.setColor(Color.WHITE);
         paint.setStrokeWidth(4f);
         paint.setAntiAlias(true);
+        paint.setStyle(Paint.Style.STROKE);
+        
+        wavePath = new android.graphics.Path();
 
         scaleGestureDetector = new android.view.ScaleGestureDetector(context, new android.view.ScaleGestureDetector.SimpleOnScaleGestureListener() {
             @Override
@@ -132,31 +136,77 @@ public class WaveformView extends View {
         if (amplitudes == null || amplitudes.length == 0) return;
 
         float centerY = height / 2f;
-        // Reference image has very tight spacing and rounded blocks
-        // Using this.spacing to refer to the member variable
-        float currentSpacing = Math.max(4f, this.spacing); 
-        float barWidth = currentSpacing * 0.7f; // Wider bars relative to spacing for that "connected" look
+        float currentSpacing = Math.max(4f, this.spacing);
         float screenCenterX = width / 2f;
+
+        // 1. Draw Professional Symmetrical Bezier Curve Waveform
+        wavePath.reset();
+        
+        boolean firstPoint = true;
+        float lastX = -1, lastYTop = -1, lastYBottom = -1;
 
         for (int i = 0; i < amplitudes.length; i++) {
             float x = screenCenterX + (i * currentSpacing) - scrollOffset;
             
-            if (x > -currentSpacing && x < width + currentSpacing) {
-                // Symmetrical height: Reduced multiplier to 0.6f to prevent match_parent look
+            // Only process if within or near visible bounds for performance
+            if (x > -currentSpacing * 2 && x < width + currentSpacing * 2) {
                 float barHeight = amplitudes[i] * (height * 0.6f);
-                
-                if (x < screenCenterX) {
-                    paint.setColor(Color.WHITE);
+                float yTop = centerY - barHeight / 2f;
+                float yBottom = centerY + barHeight / 2f;
+
+                if (firstPoint) {
+                    wavePath.moveTo(x, yTop);
+                    firstPoint = false;
                 } else {
-                    paint.setColor(Color.parseColor("#80FFFFFF"));
+                    // Bezier Smoothing for top curve
+                    float controlX = (lastX + x) / 2f;
+                    wavePath.quadTo(controlX, lastYTop, x, yTop);
                 }
-                
-                paint.setStrokeCap(Paint.Cap.ROUND);
-                paint.setStrokeWidth(barWidth);
-                
-                // Drawing thicker vertical bars that look like the reference blocks
-                canvas.drawLine(x, centerY - barHeight / 2f, x, centerY + barHeight / 2f, paint);
+                lastX = x;
+                lastYTop = yTop;
+                lastYBottom = yBottom;
             }
         }
+
+        // Draw bottom curve in reverse to close the path symmetrically
+        for (int i = amplitudes.length - 1; i >= 0; i--) {
+            float x = screenCenterX + (i * currentSpacing) - scrollOffset;
+            if (x > -currentSpacing * 2 && x < width + currentSpacing * 2) {
+                float barHeight = amplitudes[i] * (height * 0.6f);
+                float yBottom = centerY + barHeight / 2f;
+                
+                float controlX = (lastX + x) / 2f;
+                wavePath.quadTo(controlX, lastYBottom, x, yBottom);
+                
+                lastX = x;
+                lastYBottom = yBottom;
+            }
+        }
+        
+        wavePath.close();
+
+        // 2. Playback State Coloring (Clip then fill)
+        canvas.save();
+        
+        // Played Part (Left)
+        canvas.clipRect(0, 0, screenCenterX, height);
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(Color.WHITE);
+        canvas.drawPath(wavePath, paint);
+        canvas.restore();
+
+        // Upcoming Part (Right)
+        canvas.save();
+        canvas.clipRect(screenCenterX, 0, width, height);
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(Color.parseColor("#80FFFFFF"));
+        canvas.drawPath(wavePath, paint);
+        canvas.restore();
+        
+        // Optional: Draw outline for extra sharpness
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(1.5f);
+        paint.setColor(Color.parseColor("#33FFFFFF"));
+        canvas.drawPath(wavePath, paint);
     }
 }

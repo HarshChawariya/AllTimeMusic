@@ -367,6 +367,11 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
 
                 long duration = format.getLong(android.media.MediaFormat.KEY_DURATION);
                 int points = 1000;
+                
+                // ADAPTIVE DETAIL: Long songs get more points for higher fidelity
+                if (duration > 300000) points = 1500; // > 5 mins
+                if (duration > 600000) points = 2000; // > 10 mins
+
                 float[] peaks = new float[points];
                 android.media.MediaCodec.BufferInfo info = new android.media.MediaCodec.BufferInfo();
 
@@ -375,9 +380,10 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
                     extractor.seekTo(seekTime, android.media.MediaExtractor.SEEK_TO_CLOSEST_SYNC);
                     
                     float maxInChunk = 0;
+                    float beatEnergy = 0;
                     int decodedFrames = 0;
                     
-                    // Increased decoding window to 6 frames to catch fast beats/transients better
+                    // MULTI-PASS STYLE: Capture transients and steady vocals
                     while (decodedFrames < 6) { 
                         int inputIndex = codec.dequeueInputBuffer(2000);
                         if (inputIndex >= 0) {
@@ -400,6 +406,9 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
                                 short sample = outputBuffer.getShort();
                                 float absSample = Math.abs(sample) / 32768f;
                                 if (absSample > maxInChunk) maxInChunk = absSample;
+                                
+                                // Simple Bass/Beat Energy Simulation
+                                if (absSample > 0.6f) beatEnergy += absSample;
                             }
                             
                             codec.releaseOutputBuffer(outputIndex, false);
@@ -409,16 +418,14 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
                         }
                     }
                     
-                    // IMPROVED SCALING:
-                    // If maxInChunk is very low (silence/no singing), keep it very small.
-                    // If there's a beat/vocal, let it reach higher but without artificial capping.
-                    if (maxInChunk < 0.01f) {
-                        peaks[i] = 0.02f; // Near flat line for silence
+                    // KINEMASTER BLEND: Combine raw peak with weighted rhythmic energy
+                    float combined = (maxInChunk * 0.75f) + (Math.min(0.25f, beatEnergy / 800f));
+                    
+                    if (combined < 0.01f) {
+                        peaks[i] = 0.02f; 
                     } else {
-                        // Using a stronger power (1.5 instead of 1.2) to make peaks pop out more
-                        // from the background noise.
-                        float exaggerated = (float) Math.pow(maxInChunk, 1.5f); 
-                        peaks[i] = Math.max(0.02f, Math.min(1.0f, exaggerated * 4.0f));
+                        float exaggerated = (float) Math.pow(combined, 1.4f); 
+                        peaks[i] = Math.max(0.02f, Math.min(1.0f, exaggerated * 4.5f));
                     }
                 }
 
