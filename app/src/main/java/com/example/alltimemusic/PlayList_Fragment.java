@@ -525,8 +525,11 @@ public class PlayList_Fragment extends Fragment {
     }
 
     public String createTime(int ms) {
-        int sec = ms / 1000;
-        return getString(R.string.time_format, sec / 60, sec % 60);
+        int seconds = ms / 1000;
+        int minutes = seconds / 60;
+        seconds = seconds % 60;
+        // Use Locale.US to ensure consistent digit formatting
+        return String.format(Locale.US, "%02d:%02d", minutes, seconds);
     }
 
     public static PlayList_Fragment newInstance(String value1, String value2){

@@ -77,7 +77,7 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
         int seconds = ms / 1000;
         int minutes = seconds / 60;
         seconds = seconds % 60;
-        return String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds);
+        return String.format(Locale.US, "%02d:%02d", minutes, seconds);
     }
 
     @Override
