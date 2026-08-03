@@ -8,17 +8,18 @@
     android:padding="20dp">
 
     <View
+        android:id="@+id/dialog_view"
         android:layout_width="40dp"
         android:layout_height="4dp"
         android:layout_gravity="center_horizontal"
         android:layout_marginBottom="20dp"
-        android:background="#4DFFFFFF" />
+        android:background="@drawable/dialog_handle_rounded" />
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="Add Lyrics"
-        android:textColor="@color/white"
+        android:textColor="@color/black"
         android:textSize="22sp"
         android:fontFamily="sans-serif-black"
         android:textStyle="bold" />
@@ -28,22 +29,31 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
         android:text="Paste plain text or LRC format [00:12.34] for synced mode."
-        android:textColor="#B3FFFFFF"
+        android:textColor="#666666"
         android:textSize="12sp" />
 
-    <EditText
-        android:id="@+id/lyrics_input"
+    <ScrollView
         android:layout_width="match_parent"
         android:layout_height="250dp"
         android:layout_marginTop="16dp"
-        android:background="@drawable/round_back_white10_100"
-        android:gravity="top"
-        android:hint="Paste lyrics here..."
-        android:inputType="textMultiLine"
-        android:padding="12dp"
-        android:textColor="@color/white"
-        android:textColorHint="#66FFFFFF"
-        android:textSize="14sp" />
+        android:background="@drawable/input_bg_rounded_grey"
+        android:overScrollMode="never"
+        android:scrollbars="vertical">
+
+        <EditText
+            android:id="@+id/lyrics_input"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@android:color/transparent"
+            android:gravity="top"
+            android:hint="Paste lyrics here..."
+            android:inputType="textMultiLine"
+            android:minHeight="250dp"
+            android:padding="12dp"
+            android:textColor="@color/black"
+            android:textColorHint="#999999"
+            android:textSize="14sp" />
+    </ScrollView>
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -58,17 +68,19 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="Cancel"
-            android:textColor="@color/white" />
+            android:textAllCaps="false"/>
 
         <Button
             android:id="@+id/btn_save_lyrics"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="12dp"
             android:layout_weight="1"
-            android:backgroundTint="#9D201A"
+            android:background="@drawable/input_bg_rounded_grey"
+            app:backgroundTint="@null"
             android:text="Save Lyrics"
-            android:textColor="@color/white"
+            android:textAllCaps="false"
             app:cornerRadius="8dp" />
     </LinearLayout>
 

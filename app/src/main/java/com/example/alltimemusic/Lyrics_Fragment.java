@@ -743,6 +743,14 @@ public class Lyrics_Fragment extends Fragment {
         android.widget.Button btnSave = dialogView.findViewById(R.id.btn_save_lyrics);
         android.widget.Button btnCancel = dialogView.findViewById(R.id.btn_cancel_lyrics);
 
+        // Apply Dynamic Colors to Buttons
+        int dynamicColor = MainActivity.lastDynamicColor;
+        btnSave.setTextColor(dynamicColor); 
+        btnCancel.setTextColor(dynamicColor);
+        // Note: User asked for textColor to be dynamic. 
+        // If we want the background to be dynamic instead, we would use setBackgroundTintList.
+        // But following user rule to keep text color dynamic.
+
         btnCancel.setOnClickListener(v -> bottomSheetDialog.dismiss());
 
         btnSave.setOnClickListener(v -> {
