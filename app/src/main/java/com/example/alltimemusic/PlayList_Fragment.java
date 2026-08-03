@@ -1,7 +1,9 @@
 package com.example.alltimemusic;
 
 import android.content.ContentUris;
+import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
@@ -58,6 +60,8 @@ public class PlayList_Fragment extends Fragment {
     private int position;
     public static int playingPosition = -1;
     private int currentLoopMode = 0; // 0: No Loop, 1: Single Loop, 2: Playlist Loop, 3: Shuffle
+    private static final String PREFS_NAME = "MusicPrefs";
+    private static final String KEY_LOOP_MODE = "currentLoopMode";
     private long lastClickTime = 0;
     private final Handler seekBarHandler = new Handler(Looper.getMainLooper());
     private final Runnable seekBarRunnable = new Runnable() {
@@ -541,6 +545,21 @@ public class PlayList_Fragment extends Fragment {
         return fragment;
     }
 
+    private void saveLoopMode(int mode) {
+        if (getContext() != null) {
+            SharedPreferences prefs = getContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+            prefs.edit().putInt(KEY_LOOP_MODE, mode).apply();
+        }
+    }
+
+    private int loadLoopMode() {
+        if (getContext() != null) {
+            SharedPreferences prefs = getContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+            return prefs.getInt(KEY_LOOP_MODE, 0); // Default to No Loop (0)
+        }
+        return 0;
+    }
+
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         // Inflate the layout for this fragment
@@ -564,6 +583,9 @@ public class PlayList_Fragment extends Fragment {
         songs = musicList_Recycler_Adapter.fullMusicList;
         arrPlayList = songs;
         position = musicList_Recycler_Adapter.currentPosition;
+
+        // Load saved loop mode
+        currentLoopMode = loadLoopMode();
 
         if (arrPlayList != null && !arrPlayList.isEmpty()) {
             musicList_Structure current = arrPlayList.get(position);
@@ -609,6 +631,7 @@ public class PlayList_Fragment extends Fragment {
 
         loopButton.setOnClickListener(v -> {
             currentLoopMode = (currentLoopMode + 1) % 4;
+            saveLoopMode(currentLoopMode); // Save to SharedPreferences
             applyLoopMode(true);
         });
 
