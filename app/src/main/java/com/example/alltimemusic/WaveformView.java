@@ -7,13 +7,12 @@ import android.graphics.Paint;
 import android.util.AttributeSet;
 import android.view.View;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import java.util.Random;
-
 public class WaveformView extends View {
-    private Paint paint;
-    private android.graphics.Path wavePath;
+    private final Paint paint;
+    private final android.graphics.Path wavePath;
     private float[] amplitudes = new float[0];
     private int width, height;
     private float scrollOffset = 0;
@@ -21,7 +20,7 @@ public class WaveformView extends View {
     private OnWaveformScrollListener scrollListener;
     private float lastTouchX;
     private boolean isDragging = false;
-    private android.view.ScaleGestureDetector scaleGestureDetector;
+    private final android.view.ScaleGestureDetector scaleGestureDetector;
 
     public interface OnWaveformScrollListener {
         void onWaveformScroll(float progress);
@@ -41,7 +40,7 @@ public class WaveformView extends View {
 
         scaleGestureDetector = new android.view.ScaleGestureDetector(context, new android.view.ScaleGestureDetector.SimpleOnScaleGestureListener() {
             @Override
-            public boolean onScale(android.view.ScaleGestureDetector detector) {
+            public boolean onScale(@NonNull android.view.ScaleGestureDetector detector) {
                 float scaleFactor = detector.getScaleFactor();
                 float newSpacing = spacing * scaleFactor;
                 
@@ -139,74 +138,62 @@ public class WaveformView extends View {
         float currentSpacing = Math.max(4f, this.spacing);
         float screenCenterX = width / 2f;
 
-        // 1. Draw Professional Symmetrical Bezier Curve Waveform
+        // 1. Build the path for a Perfectly Mirrored Bezier Waveform
         wavePath.reset();
         
         boolean firstPoint = true;
-        float lastX = -1, lastYTop = -1, lastYBottom = -1;
+        float lastX = 0;
+        float lastYTop = 0;
 
+        // TOP HALF: Drawing from left to right
         for (int i = 0; i < amplitudes.length; i++) {
             float x = screenCenterX + (i * currentSpacing) - scrollOffset;
             
-            // Only process if within or near visible bounds for performance
+            // Only process points that are visible (plus a small buffer for smooth curves)
             if (x > -currentSpacing * 2 && x < width + currentSpacing * 2) {
                 float barHeight = amplitudes[i] * (height * 0.6f);
                 float yTop = centerY - barHeight / 2f;
-                float yBottom = centerY + barHeight / 2f;
 
                 if (firstPoint) {
                     wavePath.moveTo(x, yTop);
                     firstPoint = false;
                 } else {
-                    // Bezier Smoothing for top curve
-                    float controlX = (lastX + x) / 2f;
-                    wavePath.quadTo(controlX, lastYTop, x, yTop);
+                    // Use quadTo for smoothing
+                    wavePath.quadTo((lastX + x) / 2f, lastYTop, x, yTop);
                 }
                 lastX = x;
                 lastYTop = yTop;
-                lastYBottom = yBottom;
             }
         }
 
-        // Draw bottom curve in reverse to close the path symmetrically
+        // BOTTOM HALF (Mirror): Drawing from right to left using the exact same coordinates
+        // This ensures the bottom part is a 100% accurate reflection of the top
         for (int i = amplitudes.length - 1; i >= 0; i--) {
             float x = screenCenterX + (i * currentSpacing) - scrollOffset;
             if (x > -currentSpacing * 2 && x < width + currentSpacing * 2) {
                 float barHeight = amplitudes[i] * (height * 0.6f);
-                float yBottom = centerY + barHeight / 2f;
-                
-                float controlX = (lastX + x) / 2f;
-                wavePath.quadTo(controlX, lastYBottom, x, yBottom);
-                
-                lastX = x;
-                lastYBottom = yBottom;
+                float yBottom = centerY + barHeight / 2f; // Mirrors yTop exactly
+                wavePath.lineTo(x, yBottom);
             }
         }
         
         wavePath.close();
 
-        // 2. Playback State Coloring (Clip then fill)
+        // 2. Playback State Coloring (Fill the Path)
         canvas.save();
-        
-        // Played Part (Left)
+        // Left Side (Played): Full White
         canvas.clipRect(0, 0, screenCenterX, height);
         paint.setStyle(Paint.Style.FILL);
         paint.setColor(Color.WHITE);
         canvas.drawPath(wavePath, paint);
         canvas.restore();
 
-        // Upcoming Part (Right)
         canvas.save();
+        // Right Side (Upcoming): Semi-transparent
         canvas.clipRect(screenCenterX, 0, width, height);
         paint.setStyle(Paint.Style.FILL);
         paint.setColor(Color.parseColor("#80FFFFFF"));
         canvas.drawPath(wavePath, paint);
         canvas.restore();
-        
-        // Optional: Draw outline for extra sharpness
-        paint.setStyle(Paint.Style.STROKE);
-        paint.setStrokeWidth(1.5f);
-        paint.setColor(Color.parseColor("#33FFFFFF"));
-        canvas.drawPath(wavePath, paint);
     }
 }

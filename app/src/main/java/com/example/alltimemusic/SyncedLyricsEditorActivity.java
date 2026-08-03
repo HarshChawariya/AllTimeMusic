@@ -19,30 +19,28 @@ import androidx.recyclerview.widget.RecyclerView;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
+
+import linc.com.amplituda.Amplituda;
 
 public class SyncedLyricsEditorActivity extends AppCompatActivity {
 
     private RecyclerView recyclerView;
     private EditorLyricsAdapter adapter;
-    private List<LyricLine> lyricLines = new ArrayList<>();
-    private TextView currentLineDisplay, currentTimeTxt, totalDurationTxt;
-    private EditText lineEditText;
+    private final List<LyricLine> lyricLines = new ArrayList<>();
+    private TextView currentLineDisplay, currentTimeTxt;
     private SeekBar seekBar;
-    private ImageView playPauseBtn, previewBtn, optionsMenuBtn;
-    private Button btnSetTimestamp, btnSave;
-    private View btnUndo, btnRedo, centerLine, topFade, bottomFade;
+    private ImageView playPauseBtn, previewBtn, btnUndo, btnRedo;
+    private Button btnSetTimestamp;
+    private View centerLine, topFade, bottomFade, loadingLayout;
     private WaveformView waveformView;
-    private View loadingLayout;
     private musicList_Structure currentSong;
     private int selectedIndex = -1;
     private boolean isPreviewMode = false;
     private boolean isEditingSynced = true; // Priority: Synced by default
 
-    private java.util.Stack<List<LyricLine>> undoStack = new java.util.Stack<>();
-    private java.util.Stack<List<LyricLine>> redoStack = new java.util.Stack<>();
-
-    private long lastClickTime = 0;
-    private static final long DOUBLE_CLICK_TIME_DELTA = 300; // milliseconds
+    private final java.util.Stack<List<LyricLine>> undoStack = new java.util.Stack<>();
+    private final java.util.Stack<List<LyricLine>> redoStack = new java.util.Stack<>();
 
     private final Handler updateHandler = new Handler(Looper.getMainLooper());
     private final Runnable updateRunnable = new Runnable() {
@@ -91,16 +89,15 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
         recyclerView = findViewById(R.id.lyrics_edit_recycler);
         currentLineDisplay = findViewById(R.id.current_line_display);
         currentTimeTxt = findViewById(R.id.editor_current_time);
-        totalDurationTxt = findViewById(R.id.editor_total_duration);
-        lineEditText = findViewById(R.id.line_edit_text);
+        TextView totalDurationTxt = findViewById(R.id.editor_total_duration);
         seekBar = findViewById(R.id.editor_seekbar);
         playPauseBtn = findViewById(R.id.editor_play_pause);
         previewBtn = findViewById(R.id.btn_preview_lyrics);
         btnSetTimestamp = findViewById(R.id.btn_set_timestamp);
-        btnSave = findViewById(R.id.btn_save_synced);
+        Button btnSave = findViewById(R.id.btn_save_synced);
+        ImageView optionsMenuBtn = findViewById(R.id.editor_options_menu);
         btnUndo = findViewById(R.id.btn_undo);
         btnRedo = findViewById(R.id.btn_redo);
-        optionsMenuBtn = findViewById(R.id.editor_options_menu);
         centerLine = findViewById(R.id.center_line_indicator);
         topFade = findViewById(R.id.editor_top_fade);
         bottomFade = findViewById(R.id.editor_bottom_fade);
@@ -123,7 +120,7 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
         // Apply Dynamic Fades
         applyDynamicFades(dynamicColor);
 
-        // Priority Loading (Feature #2)
+        // Priority Loading
         loadLyricsWithPriority();
         
         // Start Waveform Scanning
@@ -185,18 +182,17 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
 
             @Override
             public void onAddLineAfter(int position) {
-                // Add new lyric between lines (Suggestion #3)
+                // Add new lyric between lines
                 addNewLineDialog(position + 1, "");
             }
 
             @Override
             public void onAddMusicNoteAfter(int position) {
-                // Add single music note (♪) between lines as requested
+                // Add single music note (♪) between lines
                 saveStateToUndo();
                 lyricLines.add(position + 1, new LyricLine(0, "♪"));
                 adapter.notifyItemInserted(position + 1);
                 adapter.notifyItemRangeChanged(position + 1, lyricLines.size());
-                Toast.makeText(SyncedLyricsEditorActivity.this, "Single Music Note Added", Toast.LENGTH_SHORT).show();
             }
 
             @Override
@@ -238,12 +234,6 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
             @Override
             public void onWaveformDragEnd() {}
         });
-
-        // Initialize Undo/Redo Views (Previously added in layout but may need finding)
-        // I need to check the layout to see if undo/redo buttons are there.
-        // The user said they rolled back, so I should check activity_synced_lyrics_editor.xml again.
-        btnUndo = findViewById(R.id.btn_undo);
-        btnRedo = findViewById(R.id.btn_redo);
 
         // Listeners
         backBtn.setOnClickListener(v -> finish());
@@ -298,7 +288,7 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
                 }
                 adapter.notifyItemChanged(selectedIndex);
             } else {
-                Toast.makeText(this, "Select a line first", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Please! Select Any Line", Toast.LENGTH_SHORT).show();
             }
         });
 
@@ -416,13 +406,13 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
             for (String line : split) {
                 java.util.regex.Matcher matcher = pattern.matcher(line);
                 if (matcher.find()) {
-                    long min = Long.parseLong(matcher.group(1));
-                    long sec = Long.parseLong(matcher.group(2));
+                    long min = Long.parseLong(Objects.requireNonNull(matcher.group(1)));
+                    long sec = Long.parseLong(Objects.requireNonNull(matcher.group(2)));
                     String msStr = matcher.group(3);
-                    long ms = Long.parseLong(msStr);
+                    long ms = Long.parseLong(Objects.requireNonNull(msStr));
                     if (msStr.length() == 2) ms *= 10;
                     long time = (min * 60 * 1000) + (sec * 1000) + ms;
-                    lyricLines.add(new LyricLine(time, matcher.group(4).trim()));
+                    lyricLines.add(new LyricLine(time, Objects.requireNonNull(matcher.group(4)).trim()));
                 } else if (!line.trim().isEmpty()) {
                     // Fallback for lines without tags in synced file
                     lyricLines.add(new LyricLine(0, line.trim()));
@@ -489,7 +479,7 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
         // Center the active line vertically (Suggestion #2)
         LinearLayoutManager layoutManager = (LinearLayoutManager) recyclerView.getLayoutManager();
         if (layoutManager != null) {
-            int offset = recyclerView.getHeight() / 2 - 60; // Approximate center
+            int offset = (recyclerView.getHeight() / 2) - 60; // Approximate center
             layoutManager.scrollToPositionWithOffset(index, offset);
         }
     }
@@ -536,7 +526,7 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
     private void showEditDialog(int index) {
         saveStateToUndo();
         android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this);
-        builder.setTitle("Edit Lyric Line");
+        builder.setTitle("Please! Edit Your Lyric.");
         
         final EditText input = new EditText(this);
         input.setText(lyricLines.get(index).getText());
@@ -559,7 +549,7 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
     private void addNewLineDialog(int index, String initialText) {
         saveStateToUndo();
         android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this);
-        builder.setTitle("Add New Lyric Line");
+        builder.setTitle("Please! Enter Your Lyric.");
         
         final EditText input = new EditText(this);
         input.setText(initialText);
@@ -599,9 +589,8 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
             lyricLines.addAll(undoStack.pop());
             adapter.notifyDataSetChanged();
             if (selectedIndex != -1) selectLine(Math.min(selectedIndex, lyricLines.size()-1));
-            Toast.makeText(this, "Undo Successful", Toast.LENGTH_SHORT).show();
         } else {
-            Toast.makeText(this, "Nothing to Undo", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Nothing To Undo", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -627,108 +616,40 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
         // Show loading state
         runOnUiThread(() -> loadingLayout.setVisibility(View.VISIBLE));
 
-        // Memory Safety: Cancellation flag
-        final boolean[] isCanceled = {false};
+        Amplituda amplituda = new Amplituda(this);
+        amplituda.processAudio(currentSong.songPath)
+                .get(result -> {
+                    // Get amplitudes and scale them for our view
+                    // We want around 3000-4000 points for KineMaster look
+                    List<Integer> rawAmplitudes = result.amplitudesAsList();
+                    int totalRaw = rawAmplitudes.size();
+                    int targetPoints = 4000;
+                    float[] finalPeaks = new float[targetPoints];
 
-        // Run decoding in background to prevent UI lag
-        new Thread(() -> {
-            android.media.MediaExtractor extractor = new android.media.MediaExtractor();
-            android.media.MediaCodec codec = null;
-            try {
-                extractor.setDataSource(currentSong.songPath);
-                
-                android.media.MediaFormat format = null;
-                int trackIndex = -1;
-                for (int i = 0; i < extractor.getTrackCount(); i++) {
-                    android.media.MediaFormat f = extractor.getTrackFormat(i);
-                    if (f.getString(android.media.MediaFormat.KEY_MIME).startsWith("audio/")) {
-                        format = f;
-                        trackIndex = i;
-                        extractor.selectTrack(i);
-                        break;
-                    }
-                }
-
-                if (format == null) return;
-
-                // PROFESSIONAL STRATEGY: Full Decode Snapshots
-                codec = android.media.MediaCodec.createDecoderByType(format.getString(android.media.MediaFormat.KEY_MIME));
-                codec.configure(format, null, null, 0);
-                codec.start();
-
-                long duration = format.getLong(android.media.MediaFormat.KEY_DURATION);
-                
-                // CONTINUOUS SCANNING: Scan more points for 100% accuracy
-                int points = 3000;
-                float[] peaks = new float[points];
-                android.media.MediaCodec.BufferInfo info = new android.media.MediaCodec.BufferInfo();
-                
-                long sampleInterval = duration / points;
-
-                for (int i = 0; i < points; i++) {
-                    if (isCanceled[0]) break; // Safety check for memory leaks
-
-                    // Suggestion #2: Accurate frame-by-frame capture
-                    long seekTime = i * sampleInterval;
-                    extractor.seekTo(seekTime, android.media.MediaExtractor.SEEK_TO_PREVIOUS_SYNC);
-                    
-                    float maxInChunk = 0;
-                    int decodedFrames = 0;
-                    
-                    // Decode a precise window to catch transients (Beats/Vocals)
-                    while (decodedFrames < 4) { 
-                        int inputIndex = codec.dequeueInputBuffer(2000);
-                        if (inputIndex >= 0) {
-                            java.nio.ByteBuffer inputBuffer = codec.getInputBuffer(inputIndex);
-                            int sampleSize = extractor.readSampleData(inputBuffer, 0);
-                            if (sampleSize > 0) {
-                                codec.queueInputBuffer(inputIndex, 0, sampleSize, extractor.getSampleTime(), 0);
-                                extractor.advance();
-                            } else {
-                                codec.queueInputBuffer(inputIndex, 0, 0, 0, android.media.MediaCodec.BUFFER_FLAG_END_OF_STREAM);
-                                break;
-                            }
+                    for (int i = 0; i < targetPoints; i++) {
+                        int rawIndex = (int) ((i / (float) targetPoints) * totalRaw);
+                        if (rawIndex < totalRaw) {
+                            float val = rawAmplitudes.get(rawIndex) / 100f; // Amplituda usually returns 0-100
+                            // Apply similar KineMaster-style boost
+                            float exaggerated = (float) Math.pow(val, 0.9f); 
+                            finalPeaks[i] = Math.max(0.015f, Math.min(1.0f, exaggerated * 1.2f));
+                        } else {
+                            finalPeaks[i] = 0.015f;
                         }
-
-                        int outputIndex = codec.dequeueOutputBuffer(info, 2000);
-                        if (outputIndex >= 0) {
-                            java.nio.ByteBuffer outputBuffer = codec.getOutputBuffer(outputIndex);
-                            while (outputBuffer.remaining() >= 2) {
-                                short sample = outputBuffer.getShort();
-                                float absSample = Math.abs(sample) / 32768f;
-                                if (absSample > maxInChunk) maxInChunk = absSample;
-                            }
-                            codec.releaseOutputBuffer(outputIndex, false);
-                            decodedFrames++;
-                        } else break;
                     }
-                    
-                    // High-Detail Scaling
-                    float exaggerated = (float) Math.pow(maxInChunk, 1.3f); 
-                    peaks[i] = Math.max(0.015f, Math.min(1.0f, exaggerated * 4.0f));
-                }
 
-                if (!isCanceled[0]) {
-                    float[] finalPeaks = peaks;
                     runOnUiThread(() -> {
                         waveformView.setAmplitudes(finalPeaks);
                         loadingLayout.setVisibility(View.GONE);
                         if (centerLine != null) centerLine.setVisibility(View.VISIBLE);
                     });
-                }
-
-            } catch (Exception e) {
-                e.printStackTrace();
-            } finally {
-                try {
-                    if (codec != null) {
-                        codec.stop();
-                        codec.release();
-                    }
-                    extractor.release();
-                } catch (Exception ignored) {}
-            }
-        }).start();
+                }, exception -> {
+                    exception.printStackTrace();
+                    runOnUiThread(() -> {
+                        loadingLayout.setVisibility(View.GONE);
+                        Toast.makeText(this, "Failed to load waveform", Toast.LENGTH_SHORT).show();
+                    });
+                });
     }
 
     private void updatePauseIcon() {

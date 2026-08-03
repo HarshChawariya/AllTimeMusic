@@ -35,6 +35,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 
 public class PlayList_Fragment extends Fragment {
 
@@ -497,14 +498,14 @@ public class PlayList_Fragment extends Fragment {
             java.util.regex.Matcher matcher = pattern.matcher(line);
             if (matcher.find()) {
                 try {
-                    long min = Long.parseLong(matcher.group(1));
-                    long sec = Long.parseLong(matcher.group(2));
+                    long min = Long.parseLong(Objects.requireNonNull(matcher.group(1)));
+                    long sec = Long.parseLong(Objects.requireNonNull(matcher.group(2)));
                     String msStrRaw = matcher.group(3);
-                    long ms = Long.parseLong(msStrRaw);
+                    long ms = Long.parseLong(Objects.requireNonNull(msStrRaw));
                     if (msStrRaw.length() == 2) ms *= 10;
 
                     long time = (min * 60 * 1000) + (sec * 1000) + ms;
-                    String text = matcher.group(4).trim();
+                    String text = Objects.requireNonNull(matcher.group(4)).trim();
 
                     if (!text.isEmpty()) {
                         lines.add(new LyricLine(time, text));
@@ -599,14 +600,8 @@ public class PlayList_Fragment extends Fragment {
                     textSeek1.setText(createTime(progress));
                 }
             }
-            @Override public void onStartTrackingTouch(SeekBar seekBar) {
-                //textSeek1.setText(createTime(seekBar.getProgress()));
-//                seekBar.setProgressDrawable(AppCompatResources.getDrawable(getApplicationContext(), R.drawable.rec_drw_seekprogress));
-//                seekBar.setThumb(AppCompatResources.getDrawable(getApplicationContext(), R.drawable.rec_drw_seek_thumb));
-            }
-            @Override public void onStopTrackingTouch(SeekBar seekBar) {
-               // textSeek1.setText(createTime(seekBar.getProgress()));
-            }
+            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
         });
 
         loopButton.setOnClickListener(v -> {

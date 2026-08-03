@@ -16,6 +16,7 @@ okhttp = "5.4.0"
 glide = "5.0.9"
 palette = "1.0.0"
 lottie = "6.7.1"
+amplituda = "2.2.2"
 
 [libraries]
 junit = { group = "junit", name = "junit", version.ref = "junit" }
@@ -32,6 +33,7 @@ glide = { group = "com.github.bumptech.glide", name = "glide", version.ref = "gl
 glide-compiler = { group = "com.github.bumptech.glide", name = "compiler", version.ref = "glide" }
 palette = { group = "androidx.palette", name = "palette", version.ref = "palette" }
 lottie = { group = "com.airbnb.android", name = "lottie", version.ref = "lottie" }
+amplituda = { group = "com.github.lincollincol", name = "amplituda", version.ref = "amplituda" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

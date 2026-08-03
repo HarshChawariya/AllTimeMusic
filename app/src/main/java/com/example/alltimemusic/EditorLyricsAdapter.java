@@ -67,7 +67,7 @@ public class EditorLyricsAdapter extends RecyclerView.Adapter<EditorLyricsAdapte
             holder.timestampView.setText(String.format(Locale.US, "%02d:%02d.%02d", min, sec, ms));
             holder.timestampView.setAlpha(1.0f);
         } else {
-            holder.timestampView.setText("--:--.--");
+            holder.timestampView.setText("00:00.00");
             holder.timestampView.setAlpha(0.3f);
         }
 
