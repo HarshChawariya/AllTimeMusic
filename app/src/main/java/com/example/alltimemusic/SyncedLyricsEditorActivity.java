@@ -431,25 +431,24 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
     }
 
     private void showOptionsMenu(View view) {
-        android.widget.PopupMenu popup = new android.widget.PopupMenu(this, view);
-        popup.getMenu().add("Edit Plain Lyrics").setCheckable(true).setChecked(!isEditingSynced);
-        popup.getMenu().add("Edit Synced Lyrics").setCheckable(true).setChecked(isEditingSynced);
+        CustomPopupMenu popup = new CustomPopupMenu(this, view);
+        popup.setItemTextColor(MainActivity.lastDynamicColor);
+        popup.addMenuItem("Edit Plain Lyrics");
+        popup.addMenuItem("Edit Synced Lyrics");
         
-        popup.setOnMenuItemClickListener(item -> {
-            String title = item.getTitle().toString();
+        popup.setOnItemClickListener(title -> {
             FavoritesDatabase db = new FavoritesDatabase(this);
             String[] lyrics = db.getCachedLyrics(currentSong.songPath);
             
             if (title.equals("Edit Plain Lyrics")) {
                 isEditingSynced = false;
                 if (lyrics != null) parseLyricsToLines(lyrics[0]);
-            } else {
+            } else if (title.equals("Edit Synced Lyrics")) {
                 isEditingSynced = true;
                 if (lyrics != null) parseLyricsToLines(lyrics[1]);
             }
-            return true;
         });
-        popup.show();
+        popup.show(view);
     }
 
     private void loadPlainLyrics() {

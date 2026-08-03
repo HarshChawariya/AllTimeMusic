@@ -120,6 +120,7 @@ public class MainActivity extends AppCompatActivity {
 
         imgThreeDot.setOnClickListener(v -> {
             CustomPopupMenu popup = new CustomPopupMenu(this, v);
+            popup.setItemTextColor(lastDynamicColor);
             popup.addMenuItem("Plain Lyrics");
             popup.addMenuItem("Synced Lyrics");
             popup.addMenuItem("Synced Lyrics Editor");

@@ -18,6 +18,7 @@ public class CustomPopupMenu {
     private final PopupWindow popupWindow;
     private final LinearLayout container;
     private OnItemClickListener listener;
+    private int itemTextColor = Color.parseColor("#9D201A"); // Default color
 
     public interface OnItemClickListener {
         void onClick(String title);
@@ -45,6 +46,7 @@ public class CustomPopupMenu {
 
         TextView textView = (TextView) LayoutInflater.from(context).inflate(R.layout.custom_menu_item, container, false);
         textView.setText(title);
+        textView.setTextColor(itemTextColor); // Apply dynamic color
         textView.setOnClickListener(v -> {
             if (listener != null) listener.onClick(title);
             popupWindow.dismiss();
@@ -54,6 +56,10 @@ public class CustomPopupMenu {
 
     public void setOnItemClickListener(OnItemClickListener listener) {
         this.listener = listener;
+    }
+
+    public void setItemTextColor(int color) {
+        this.itemTextColor = color;
     }
 
     public void show(View anchor) {

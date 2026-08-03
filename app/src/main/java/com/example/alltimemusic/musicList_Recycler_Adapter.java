@@ -133,6 +133,7 @@ public class musicList_Recycler_Adapter extends RecyclerView.Adapter<musicList_R
 
         holder.recyclerThreeDot.setOnClickListener(view -> {
             CustomPopupMenu popupMenu = new CustomPopupMenu(context, view);
+            popupMenu.setItemTextColor(MainActivity.lastDynamicColor);
             popupMenu.addMenuItem("Play Next");
             
             // Check if song is already favorite to show correct menu option
