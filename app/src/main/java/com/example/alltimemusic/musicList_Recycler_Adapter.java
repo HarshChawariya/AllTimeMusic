@@ -3,33 +3,34 @@ package com.example.alltimemusic;
 import android.annotation.SuppressLint;
 import android.content.ContentUris;
 import android.content.Context;
-import android.graphics.Color;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.media.MediaMetadataRetriever;
+import android.graphics.Color;
+import android.graphics.drawable.Drawable;
+import android.net.Uri;
 import android.view.LayoutInflater;
-import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
 import android.widget.ImageView;
-import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
-import androidx.appcompat.widget.PopupMenu;
-import androidx.core.widget.PopupMenuCompat;
+import androidx.annotation.Nullable;
+import androidx.media3.common.util.UnstableApi;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.load.resource.bitmap.CenterCrop;
+import com.bumptech.glide.request.target.CustomTarget;
+import com.bumptech.glide.request.transition.Transition;
 import com.google.android.material.imageview.ShapeableImageView;
 
+import android.graphics.drawable.BitmapDrawable;
 import java.util.ArrayList;
-import java.util.Objects;
 
+@UnstableApi
 public class musicList_Recycler_Adapter extends RecyclerView.Adapter<musicList_Recycler_Adapter.ViewHolder> {
     private int lastPosition = -1;
     private int selectedPosition = -1;
@@ -147,19 +148,12 @@ public class musicList_Recycler_Adapter extends RecyclerView.Adapter<musicList_R
                     
                     musicList_Structure selectedSong = musicList.get(currentIdx);
                     
-                    if (PlayList_Fragment.mediaPlayer != null && PlayList_Fragment.mediaPlayer.isPlaying()) {
-                        PlayList_Fragment.arrPlayNext.add(selectedSong);
-                        Toast.makeText(context, "Playing next turn: " + selectedSong.songTitle, Toast.LENGTH_SHORT).show();
+                    MainActivity activity = (context instanceof MainActivity) ? (MainActivity) context : null;
+                    if (activity != null && activity.musicViewModel != null) {
+                        activity.musicViewModel.addToPlayNext(selectedSong);
                     } else {
-                        currentItem = selectedSong;
-                        currentPosition = currentIdx;
-                        fullMusicList = musicList;
-                        if (context instanceof MainActivity) {
-                            ((MainActivity) context).openPlayerLayout();
-                        } else if (context instanceof LikedSongsActivity) {
-                            MainActivity.isReturningFromLiked = true;
-                            ((LikedSongsActivity) context).openPlayerLayout();
-                        }
+                        MusicService.arrPlayNext.add(selectedSong);
+                        Toast.makeText(context, "Added to Play Next (Legacy)", Toast.LENGTH_SHORT).show();
                     }
                 } else if (title.equals("Add To Favourite") || title.equals("Removed From Favourite")) {
                     // Toggle favorite logic
@@ -176,13 +170,6 @@ public class musicList_Recycler_Adapter extends RecyclerView.Adapter<musicList_R
                     
                     // Update visual heart indicator
                     notifyItemChanged(holder.getBindingAdapterPosition());
-                    
-                    // Sync with activities
-                    if (context instanceof MainActivity) {
-                        ((MainActivity) context).updateMiniPlayer();
-                    } else if (context instanceof LikedSongsActivity) {
-                        ((LikedSongsActivity) context).updateMiniPlayer();
-                    }
                 }
             });
             popupMenu.show(view);
@@ -225,18 +212,31 @@ public class musicList_Recycler_Adapter extends RecyclerView.Adapter<musicList_R
     private void updateListProfileImage(ImageView imageView, musicList_Structure item) {
         if (imageView == null || item == null) return;
 
-        android.net.Uri sArtworkUri = android.net.Uri.parse("content://media/external/audio/albumart");
-        android.net.Uri uri = android.content.ContentUris.withAppendedId(sArtworkUri, item.albumId);
+        Uri sArtworkUri = Uri.parse("content://media/external/audio/albumart");
+        Uri uri = ContentUris.withAppendedId(sArtworkUri, item.albumId);
 
         Glide.with(context)
                 .load(uri)
                 .placeholder(R.drawable.profile)
                 .error(R.drawable.profile)
                 .transform(new CenterCrop())
-                .into(new com.bumptech.glide.request.target.CustomTarget<android.graphics.drawable.Drawable>() {
+                .into(new CustomTarget<Drawable>() {
                     @Override
-                    public void onResourceReady(@NonNull android.graphics.drawable.Drawable resource, @androidx.annotation.Nullable com.bumptech.glide.request.transition.Transition<? super android.graphics.drawable.Drawable> transition) {
+                    public void onResourceReady(@NonNull Drawable resource, @Nullable Transition<? super Drawable> transition) {
                         imageView.setImageDrawable(resource);
+                        
+                        // PIGGYBACK EXTRACTION: Pre-extract color while loading list to eliminate playback lag
+                        if (resource instanceof BitmapDrawable) {
+                            Bitmap bitmap = ((BitmapDrawable) resource).getBitmap();
+                            if (bitmap != null && !MusicViewModel.colorCache.containsKey(item.songPath)) {
+                                // Background thread extraction to avoid scroll stutter
+                                new Thread(() -> {
+                                    int extractedColor = MusicViewModel.extractThemeColor(bitmap);
+                                    MusicViewModel.colorCache.put(item.songPath, extractedColor);
+                                }).start();
+                            }
+                        }
+
                         ViewGroup.LayoutParams params = imageView.getLayoutParams();
                         params.width = ViewGroup.LayoutParams.MATCH_PARENT;
                         params.height = ViewGroup.LayoutParams.MATCH_PARENT;
@@ -244,12 +244,12 @@ public class musicList_Recycler_Adapter extends RecyclerView.Adapter<musicList_R
                     }
 
                     @Override
-                    public void onLoadCleared(@androidx.annotation.Nullable android.graphics.drawable.Drawable placeholder) {
+                    public void onLoadCleared(@Nullable Drawable placeholder) {
                         imageView.setImageDrawable(placeholder);
                     }
 
                     @Override
-                    public void onLoadFailed(@androidx.annotation.Nullable android.graphics.drawable.Drawable errorDrawable) {
+                    public void onLoadFailed(@Nullable Drawable errorDrawable) {
                         imageView.setImageDrawable(errorDrawable);
                         setDefaultListProfileImage(imageView);
                     }

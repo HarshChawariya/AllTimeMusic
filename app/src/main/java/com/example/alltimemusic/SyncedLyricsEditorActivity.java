@@ -1,9 +1,21 @@
 package com.example.alltimemusic;
 
+import android.content.ContentUris;
+import android.content.Context;
+import android.content.res.ColorStateList;
+import android.graphics.Bitmap;
 import android.graphics.Color;
+import android.graphics.PorterDuff;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
+import android.graphics.drawable.GradientDrawable;
+import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
@@ -12,17 +24,29 @@ import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.fragment.app.Fragment;
+import androidx.lifecycle.ViewModelProvider;
+import androidx.media3.common.util.UnstableApi;
+import androidx.palette.graphics.Palette;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.request.target.CustomTarget;
+import com.bumptech.glide.request.transition.Transition;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.Objects;
+import java.util.Stack;
 
 import linc.com.amplituda.Amplituda;
 
+@UnstableApi
 public class SyncedLyricsEditorActivity extends AppCompatActivity {
 
     private RecyclerView recyclerView;
@@ -37,38 +61,28 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
     private musicList_Structure currentSong;
     private int selectedIndex = -1;
     private boolean isPreviewMode = false;
-    private boolean isEditingSynced = true; // Priority: Synced by default
+    private boolean isEditingSynced = true; 
 
-    private final java.util.Stack<List<LyricLine>> undoStack = new java.util.Stack<>();
-    private final java.util.Stack<List<LyricLine>> redoStack = new java.util.Stack<>();
+    private MusicViewModel musicViewModel;
+
+    private final Stack<List<LyricLine>> undoStack = new Stack<>();
+    private final Stack<List<LyricLine>> redoStack = new Stack<>();
 
     private final Handler updateHandler = new Handler(Looper.getMainLooper());
     private final Runnable updateRunnable = new Runnable() {
         @Override
         public void run() {
-            if (PlayList_Fragment.mediaPlayer != null) {
-                try {
-                    int currentPos = PlayList_Fragment.mediaPlayer.getCurrentPosition();
-                    int duration = PlayList_Fragment.mediaPlayer.getDuration();
-                    
-                    if (duration > 0) {
-                        seekBar.setProgress(currentPos);
-                        currentTimeTxt.setText(formatTime(currentPos));
-                        
-                        float progress = (float) currentPos / duration;
-                        waveformView.updateScroll(progress);
-                        
-                        if (isPreviewMode) {
-                            updatePreviewLyrics(currentPos);
-                        }
-                    }
-
-                    if (PlayList_Fragment.mediaPlayer.isPlaying()) {
-                        updateHandler.postDelayed(this, 50);
-                    }
-                } catch (Exception e) {
-                    // Handle state errors gracefully
+            if (musicViewModel != null && musicViewModel.getIsPlaying().getValue() != null && musicViewModel.getIsPlaying().getValue()) {
+                long currentPos = musicViewModel.getCurrentPosition().getValue() != null ? musicViewModel.getCurrentPosition().getValue() : 0;
+                long duration = musicViewModel.getDuration().getValue() != null ? musicViewModel.getDuration().getValue() : 1;
+                
+                if (duration > 0) {
+                    seekBar.setProgress((int) currentPos);
+                    currentTimeTxt.setText(formatTime((int) currentPos));
+                    waveformView.updateScroll((float) currentPos / duration);
+                    if (isPreviewMode) updatePreviewLyrics((int) currentPos);
                 }
+                updateHandler.postDelayed(this, 50); // High-precision sync
             }
         }
     };
@@ -84,6 +98,10 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_synced_lyrics_editor);
+
+        // BUG FIX: Immediate UI apply to prevent white/red flash
+        int initialColor = getIntent().getIntExtra("initial_color", 0xFF9D201A);
+        applyThemeColorToUI(initialColor);
 
         // Initialize Views
         recyclerView = findViewById(R.id.lyrics_edit_recycler);
@@ -112,13 +130,13 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
             return;
         }
 
-        // Setup UI Background Sync
-        int dynamicColor = MainActivity.lastDynamicColor;
-        findViewById(R.id.editor_root).setBackgroundColor(dynamicColor);
-        getWindow().setStatusBarColor(dynamicColor);
+        musicViewModel = new ViewModelProvider(this).get(MusicViewModel.class);
+        musicViewModel.initController(this);
+        
+        // Ensure ViewModel has the initial color before observing
+        musicViewModel.setThemeColor(initialColor);
 
-        // Apply Dynamic Fades
-        applyDynamicFades(dynamicColor);
+        observeViewModel();
 
         // Priority Loading
         loadLyricsWithPriority();
@@ -132,30 +150,8 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
         adapter.setListener(new EditorLyricsAdapter.OnEditorLyricActionListener() {
             @Override
             public void onLyricClick(int position, LyricLine line) {
-                // Tap on lyrics to seek
-                if (PlayList_Fragment.mediaPlayer != null) {
-                    if (line.getTimeMs() > 0) {
-                        int time = (int) line.getTimeMs();
-                        PlayList_Fragment.mediaPlayer.seekTo(time);
-                        
-                        // Rule: Sync all UI components immediately
-                        seekBar.setProgress(time);
-                        currentTimeTxt.setText(formatTime(time));
-                        
-                        int duration = PlayList_Fragment.mediaPlayer.getDuration();
-                        if (duration > 0) {
-                            waveformView.updateScroll((float) time / duration);
-                        }
-                        
-                        if (!PlayList_Fragment.mediaPlayer.isPlaying()) {
-                            PlayList_Fragment.mediaPlayer.start();
-                        }
-                        updatePauseIcon();
-                        
-                        // Restart update loop for smooth progress
-                        updateHandler.removeCallbacks(updateRunnable);
-                        updateHandler.post(updateRunnable);
-                    }
+                if (musicViewModel != null && line.getTimeMs() > 0) {
+                    musicViewModel.seekTo(line.getTimeMs());
                 }
                 selectLine(position);
             }
@@ -164,16 +160,13 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
             public void onDeleteLine(int position) {
                 vibrate(40);
                 saveStateToUndo();
-                
-                // Safety Fix: If deleting the currently selected line, reset selection state
                 if (selectedIndex == position) {
                     selectedIndex = -1;
                     adapter.setActiveIndex(-1);
                     currentLineDisplay.setText("Select a line to start syncing");
                 } else if (selectedIndex > position) {
-                    selectedIndex--; // Maintain correct index after removal
+                    selectedIndex--;
                 }
-
                 lyricLines.remove(position);
                 adapter.notifyItemRemoved(position);
                 adapter.notifyItemRangeChanged(position, lyricLines.size());
@@ -182,13 +175,11 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
 
             @Override
             public void onAddLineAfter(int position) {
-                // Add new lyric between lines
                 addNewLineDialog(position + 1, "");
             }
 
             @Override
             public void onAddMusicNoteAfter(int position) {
-                // Add single music note (♪) between lines
                 saveStateToUndo();
                 lyricLines.add(position + 1, new LyricLine(0, "♪"));
                 adapter.notifyItemInserted(position + 1);
@@ -203,52 +194,23 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
         recyclerView.setAdapter(adapter);
 
-        // Setup Media Player Sync
-        if (PlayList_Fragment.mediaPlayer != null) {
-            int duration = PlayList_Fragment.mediaPlayer.getDuration();
-            seekBar.setMax(duration);
-            totalDurationTxt.setText(formatTime(duration));
-            updatePauseIcon();
-        }
-
-        // Waveform Scroll Listener
         waveformView.setOnWaveformScrollListener(new WaveformView.OnWaveformScrollListener() {
             @Override
             public void onWaveformScroll(float progress) {
-                if (PlayList_Fragment.mediaPlayer != null) {
-                    int duration = PlayList_Fragment.mediaPlayer.getDuration();
-                    int newPos = (int) (progress * duration);
-                    PlayList_Fragment.mediaPlayer.seekTo(newPos);
-                    seekBar.setProgress(newPos);
-                    currentTimeTxt.setText(formatTime(newPos));
-                    
-                    if (isPreviewMode) {
-                        updatePreviewLyrics(newPos);
-                    }
+                if (musicViewModel != null && musicViewModel.getDuration().getValue() != null) {
+                    long duration = musicViewModel.getDuration().getValue();
+                    musicViewModel.seekTo((long) (progress * duration));
                 }
             }
-
-            @Override
-            public void onWaveformDragStart() {}
-
-            @Override
-            public void onWaveformDragEnd() {}
+            @Override public void onWaveformDragStart() {}
+            @Override public void onWaveformDragEnd() {}
         });
 
-        // Listeners
         backBtn.setOnClickListener(v -> finish());
 
         playPauseBtn.setOnClickListener(v -> {
-            if (PlayList_Fragment.mediaPlayer != null) {
-                if (PlayList_Fragment.mediaPlayer.isPlaying()) {
-                    PlayList_Fragment.mediaPlayer.pause();
-                    updateHandler.removeCallbacks(updateRunnable);
-                } else {
-                    PlayList_Fragment.mediaPlayer.start();
-                    updateHandler.removeCallbacks(updateRunnable);
-                    updateHandler.post(updateRunnable);
-                }
-                updatePauseIcon();
+            if (musicViewModel != null) {
+                musicViewModel.togglePlayPause();
                 vibrate(30);
             }
         });
@@ -258,32 +220,20 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
                 vibrate(50);
                 saveStateToUndo();
                 LyricLine currentLine = lyricLines.get(selectedIndex);
-                
-                // Toggle Logic: Set if 0, Clear if > 0
                 if (currentLine.getTimeMs() > 0) {
                     lyricLines.set(selectedIndex, new LyricLine(0, currentLine.getText()));
                     updateTimestampButtonStyle(0);
-                    Toast.makeText(this, "Timestamp Removed", Toast.LENGTH_SHORT).show();
                 } else {
-                    // BUG FIX: Ensure we can set timestamp even when paused
                     int currentPos = 0;
-                    if (PlayList_Fragment.mediaPlayer != null) {
-                        try {
-                            currentPos = PlayList_Fragment.mediaPlayer.getCurrentPosition();
-                        } catch (IllegalStateException e) {
-                            // Fallback to seekbar if player is in weird state
-                            currentPos = seekBar.getProgress();
-                        }
+                    if (musicViewModel != null && musicViewModel.getCurrentPosition().getValue() != null) {
+                        currentPos = musicViewModel.getCurrentPosition().getValue().intValue();
                     } else {
                         currentPos = seekBar.getProgress();
                     }
-
                     lyricLines.set(selectedIndex, new LyricLine(currentPos, currentLine.getText()));
                     updateTimestampButtonStyle(currentPos);
-                    
-                    // Auto-scroll logic (Wait a bit so user sees the change)
                     if (selectedIndex < lyricLines.size() - 1) {
-                        new Handler().postDelayed(() -> selectLine(selectedIndex + 1), 300);
+                        new Handler(Looper.getMainLooper()).postDelayed(() -> selectLine(selectedIndex + 1), 300);
                     }
                 }
                 adapter.notifyItemChanged(selectedIndex);
@@ -301,7 +251,6 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
             redo();
         });
 
-        // Remove redundant Zoom Button listeners as we now use Gestures
         previewBtn.setOnClickListener(v -> {
             vibrate(30);
             isPreviewMode = !isPreviewMode;
@@ -321,55 +270,140 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
 
         btnSave.setOnClickListener(v -> {
             saveToDatabase(true);
-            
-            // BUG FIX: Instant Refresh in Fragments
-            // This is a critical step to notify Fragments about data change
-            for (androidx.fragment.app.Fragment fragment : getSupportFragmentManager().getFragments()) {
+            for (Fragment fragment : getSupportFragmentManager().getFragments()) {
                 if (fragment instanceof Lyrics_Fragment) {
-                    ((Lyrics_Fragment) fragment).retryFetchingIfEmpty(); // Custom method for refresh
+                    ((Lyrics_Fragment) fragment).retryFetchingIfEmpty();
                 }
             }
-            // If they are static fragments in activity, we might need a more direct call or callback
-            // Since I cannot modify MainActivity easily here, I'll rely on common fragment access.
         });
 
-        optionsMenuBtn.setOnClickListener(v -> showOptionsMenu(v));
+        optionsMenuBtn.setOnClickListener(this::showOptionsMenu);
 
         seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                if (fromUser && PlayList_Fragment.mediaPlayer != null) {
-                    PlayList_Fragment.mediaPlayer.seekTo(progress);
+                if (fromUser && musicViewModel != null) {
+                    musicViewModel.seekTo(progress);
+                    // BUG FIX: Instant Waveform Sync during user interaction
+                    long duration = musicViewModel.getDuration().getValue() != null ? musicViewModel.getDuration().getValue() : 1;
+                    waveformView.updateScroll((float) progress / duration);
                     currentTimeTxt.setText(formatTime(progress));
-                    
-                    // Rule: Sync waves with seekbar sliding
-                    int duration = PlayList_Fragment.mediaPlayer.getDuration();
-                    if (duration > 0) {
-                        float waveProgress = (float) progress / duration;
-                        waveformView.updateScroll(waveProgress);
-                    }
+                    if (isPreviewMode) updatePreviewLyrics(progress);
                 }
             }
             @Override public void onStartTrackingTouch(SeekBar seekBar) {}
             @Override public void onStopTrackingTouch(SeekBar seekBar) {}
         });
+    }
 
-        updateHandler.post(updateRunnable);
+    private void observeViewModel() {
+        // Core Metadata Sync
+        musicViewModel.getCurrentSong().observe(this, song -> {
+            if (song != null) {
+                currentSong = song;
+                loadLyricsWithPriority();
+                scanAudioForWaveform();
+                extractColorFromSong(song);
+            }
+        });
+
+        // Dynamic Color Sync (Consolidated Single Observer)
+        musicViewModel.getThemeColor().observe(this, this::applyThemeColorToUI);
+
+        musicViewModel.getIsPlaying().observe(this, isPlaying -> {
+            playPauseBtn.setImageResource(isPlaying ? R.drawable.pause : R.drawable.play);
+            if (isPlaying) {
+                updateHandler.removeCallbacks(updateRunnable);
+                updateHandler.post(updateRunnable);
+            } else {
+                updateHandler.removeCallbacks(updateRunnable);
+            }
+        });
+
+        musicViewModel.getCurrentPosition().observe(this, pos -> {
+            if (musicViewModel.getIsPlaying().getValue() == null || !musicViewModel.getIsPlaying().getValue()) {
+                int currentPos = pos.intValue();
+                seekBar.setProgress(currentPos);
+                currentTimeTxt.setText(formatTime(currentPos));
+                long duration = musicViewModel.getDuration().getValue() != null ? musicViewModel.getDuration().getValue() : 1;
+                if (duration == 0) duration = 1;
+                waveformView.updateScroll((float) currentPos / duration);
+                if (isPreviewMode) updatePreviewLyrics(currentPos);
+            }
+        });
+
+        musicViewModel.getDuration().observe(this, dur -> {
+            seekBar.setMax(dur.intValue());
+            TextView totalDurationTxt = findViewById(R.id.editor_total_duration);
+            if (totalDurationTxt != null) totalDurationTxt.setText(formatTime(dur.intValue()));
+        });
+    }
+
+    private void applyThemeColorToUI(int color) {
+        View root = findViewById(R.id.editor_root);
+        if (root != null) root.setBackgroundColor(color);
+        getWindow().setStatusBarColor(color);
+        applyDynamicFades(color);
+        if (seekBar != null) {
+            seekBar.getProgressDrawable().setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN);
+            seekBar.getThumb().setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN);
+        }
+    }
+
+    private void extractColorFromSong(musicList_Structure song) {
+        if (song == null) return;
+        
+        // PIGGYBACK: Check cache first to avoid async extraction lag
+        Integer cached = MusicViewModel.colorCache.get(song.songPath);
+        if (cached != null) {
+            musicViewModel.setThemeColor(cached);
+            return; 
+        }
+
+        Uri sArtworkUri = Uri.parse("content://media/external/audio/albumart");
+        Uri uri = ContentUris.withAppendedId(sArtworkUri, song.albumId);
+
+        Glide.with(this)
+                .load(uri)
+                .into(new CustomTarget<Drawable>() {
+                    @Override
+                    public void onResourceReady(@NonNull Drawable resource, @Nullable Transition<? super Drawable> transition) {
+                        if (resource instanceof BitmapDrawable) {
+                            Bitmap bitmap = ((BitmapDrawable) resource).getBitmap();
+                            if (bitmap != null) {
+                                int width = bitmap.getWidth();
+                                int height = bitmap.getHeight();
+                                // BUG FIX: Synchronized extraction region for perfect color consistency
+                                Palette.from(bitmap)
+                                    .setRegion(width/4, height/4, (3*width)/4, (3*height)/4)
+                                    .generate(palette -> {
+                                        if (palette != null) {
+                                            Palette.Swatch swatch = palette.getVibrantSwatch();
+                                            if (swatch == null) swatch = palette.getDominantSwatch();
+                                            if (swatch != null) {
+                                                float[] hsv = new float[3];
+                                                Color.colorToHSV(swatch.getRgb(), hsv);
+                                                hsv[1] = Math.min(hsv[1] * 1.3f, 0.85f);
+                                                hsv[2] = Math.max(Math.min(hsv[2], 0.45f), 0.18f);
+                                                musicViewModel.setThemeColor(Color.HSVToColor(hsv));
+                                            }
+                                        }
+                                    });
+                            }
+                        }
+                    }
+                    @Override
+                    public void onLoadCleared(@Nullable Drawable placeholder) {}
+                });
     }
 
     private void applyDynamicFades(int color) {
         if (topFade != null) {
-            android.graphics.drawable.GradientDrawable topGd = new android.graphics.drawable.GradientDrawable(
-                    android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
-                    new int[]{color, android.graphics.Color.TRANSPARENT}
-            );
+            GradientDrawable topGd = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{color, android.graphics.Color.TRANSPARENT});
             topFade.setBackground(topGd);
         }
         if (bottomFade != null) {
-            android.graphics.drawable.GradientDrawable bottomGd = new android.graphics.drawable.GradientDrawable(
-                    android.graphics.drawable.GradientDrawable.Orientation.BOTTOM_TOP,
-                    new int[]{color, android.graphics.Color.TRANSPARENT}
-            );
+            GradientDrawable bottomGd = new GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP, new int[]{color, Color.TRANSPARENT});
             bottomFade.setBackground(bottomGd);
         }
     }
@@ -378,19 +412,13 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
         FavoritesDatabase db = new FavoritesDatabase(this);
         String[] lyrics = db.getCachedLyrics(currentSong.songPath);
         lyricLines.clear();
-
         if (lyrics != null) {
-            String synced = lyrics[1];
-            String plain = lyrics[0];
-
-            if (synced != null && !synced.isEmpty() && !synced.equalsIgnoreCase("null")) {
-                // Priority 1: Synced Lyrics
+            if (lyrics[1] != null && !lyrics[1].isEmpty() && !lyrics[1].equalsIgnoreCase("null")) {
                 isEditingSynced = true;
-                parseLyricsToLines(synced);
-            } else if (plain != null && !plain.isEmpty() && !plain.equalsIgnoreCase("null")) {
-                // Priority 2: Plain Lyrics
+                parseLyricsToLines(lyrics[1]);
+            } else if (lyrics[0] != null && !lyrics[0].isEmpty() && !lyrics[0].equalsIgnoreCase("null")) {
                 isEditingSynced = false;
-                parseLyricsToLines(plain);
+                parseLyricsToLines(lyrics[0]);
             }
         }
     }
@@ -398,33 +426,27 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
     private void parseLyricsToLines(String raw) {
         lyricLines.clear();
         if (raw == null || raw.isEmpty()) return;
-
         if (raw.contains("[")) {
-            // It's synced format [mm:ss.xx]Text
             java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("\\[(\\d{2}):(\\d{2})\\.(\\d{2,3})](.*)");
             String[] split = raw.split("\n");
             for (String line : split) {
                 java.util.regex.Matcher matcher = pattern.matcher(line);
                 if (matcher.find()) {
-                    long min = Long.parseLong(Objects.requireNonNull(matcher.group(1)));
-                    long sec = Long.parseLong(Objects.requireNonNull(matcher.group(2)));
+                    long min = Long.parseLong(matcher.group(1));
+                    long sec = Long.parseLong(matcher.group(2));
                     String msStr = matcher.group(3);
-                    long ms = Long.parseLong(Objects.requireNonNull(msStr));
+                    long ms = Long.parseLong(msStr);
                     if (msStr.length() == 2) ms *= 10;
                     long time = (min * 60 * 1000) + (sec * 1000) + ms;
-                    lyricLines.add(new LyricLine(time, Objects.requireNonNull(matcher.group(4)).trim()));
+                    lyricLines.add(new LyricLine(time, matcher.group(4).trim()));
                 } else if (!line.trim().isEmpty()) {
-                    // Fallback for lines without tags in synced file
                     lyricLines.add(new LyricLine(0, line.trim()));
                 }
             }
         } else {
-            // It's plain format
             String[] lines = raw.split("\n");
             for (String line : lines) {
-                if (!line.trim().isEmpty()) {
-                    lyricLines.add(new LyricLine(0, line.trim()));
-                }
+                if (!line.trim().isEmpty()) lyricLines.add(new LyricLine(0, line.trim()));
             }
         }
         if (adapter != null) adapter.notifyDataSetChanged();
@@ -439,7 +461,6 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
         popup.setOnItemClickListener(title -> {
             FavoritesDatabase db = new FavoritesDatabase(this);
             String[] lyrics = db.getCachedLyrics(currentSong.songPath);
-            
             if (title.equals("Edit Plain Lyrics")) {
                 isEditingSynced = false;
                 if (lyrics != null) parseLyricsToLines(lyrics[0]);
@@ -451,53 +472,34 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
         popup.show(view);
     }
 
-    private void loadPlainLyrics() {
-        FavoritesDatabase db = new FavoritesDatabase(this);
-        String[] lyrics = db.getCachedLyrics(currentSong.songPath);
-        if (lyrics != null && lyrics[0] != null && !lyrics[0].isEmpty()) {
-            String plain = lyrics[0];
-            String[] lines = plain.split("\n");
-            lyricLines.clear();
-            for (String line : lines) {
-                if (!line.trim().isEmpty()) {
-                    lyricLines.add(new LyricLine(0, line.trim()));
-                }
-            }
-        }
-    }
-
     private void selectLine(int index) {
         if (isPreviewMode) return;
         selectedIndex = index;
         adapter.setActiveIndex(index);
         LyricLine selectedLine = lyricLines.get(index);
         currentLineDisplay.setText(selectedLine.getText());
-        
         updateTimestampButtonStyle(selectedLine.getTimeMs());
-        
-        // Center the active line vertically (Suggestion #2)
         LinearLayoutManager layoutManager = (LinearLayoutManager) recyclerView.getLayoutManager();
         if (layoutManager != null) {
-            int offset = (recyclerView.getHeight() / 2) - 60; // Approximate center
-            layoutManager.scrollToPositionWithOffset(index, offset);
+            layoutManager.scrollToPositionWithOffset(index, (recyclerView.getHeight() / 2) - 60);
         }
     }
 
     private void updateTimestampButtonStyle(long timeMs) {
         if (timeMs > 0) {
             btnSetTimestamp.setText("Clear Time Stamp");
-            btnSetTimestamp.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.GRAY));
+            btnSetTimestamp.setBackgroundTintList(ColorStateList.valueOf(Color.GRAY));
         } else {
             btnSetTimestamp.setText("Set Time Stamp");
-            btnSetTimestamp.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#9D201A")));
+            btnSetTimestamp.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#9D201A")));
         }
     }
 
     private void vibrate(long ms) {
-        android.os.Vibrator v = (android.os.Vibrator) getSystemService(android.content.Context.VIBRATOR_SERVICE);
+        Vibrator v = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
         if (v != null) {
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                v.vibrate(android.os.VibrationEffect.createOneShot(ms, android.os.VibrationEffect.DEFAULT_AMPLITUDE));
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                v.vibrate(VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE));
             } else {
                 v.vibrate(ms);
             }
@@ -507,13 +509,9 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
     private void updatePreviewLyrics(int currentMs) {
         int index = -1;
         for (int i = 0; i < lyricLines.size(); i++) {
-            if (currentMs >= lyricLines.get(i).getTimeMs()) {
-                index = i;
-            } else {
-                break;
-            }
+            if (currentMs >= lyricLines.get(i).getTimeMs()) index = i;
+            else break;
         }
-
         if (index != -1 && index != selectedIndex) {
             selectedIndex = index;
             adapter.setActiveIndex(index);
@@ -526,12 +524,10 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
         saveStateToUndo();
         android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this);
         builder.setTitle("Please! Edit Your Lyric.");
-        
         final EditText input = new EditText(this);
         input.setText(lyricLines.get(index).getText());
         input.setPadding(40, 40, 40, 40);
         builder.setView(input);
-
         builder.setPositiveButton("Save", (dialog, which) -> {
             String newText = input.getText().toString().trim();
             if (!newText.isEmpty()) {
@@ -547,14 +543,12 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
 
     private void addNewLineDialog(int index, String initialText) {
         saveStateToUndo();
-        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this);
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("Please! Enter Your Lyric.");
-        
         final EditText input = new EditText(this);
         input.setText(initialText);
         input.setPadding(40, 40, 40, 40);
         builder.setView(input);
-
         builder.setPositiveButton("Add", (dialog, which) -> {
             String newText = input.getText().toString().trim();
             if (!newText.isEmpty()) {
@@ -569,9 +563,7 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
 
     private void saveStateToUndo() {
         List<LyricLine> copy = new ArrayList<>();
-        for (LyricLine line : lyricLines) {
-            copy.add(new LyricLine(line.getTimeMs(), line.getText()));
-        }
+        for (LyricLine line : lyricLines) copy.add(new LyricLine(line.getTimeMs(), line.getText()));
         undoStack.push(copy);
         redoStack.clear();
     }
@@ -579,11 +571,8 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
     private void undo() {
         if (!undoStack.isEmpty()) {
             List<LyricLine> current = new ArrayList<>();
-            for (LyricLine line : lyricLines) {
-                current.add(new LyricLine(line.getTimeMs(), line.getText()));
-            }
+            for (LyricLine line : lyricLines) current.add(new LyricLine(line.getTimeMs(), line.getText()));
             redoStack.push(current);
-            
             lyricLines.clear();
             lyricLines.addAll(undoStack.pop());
             adapter.notifyDataSetChanged();
@@ -596,47 +585,35 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
     private void redo() {
         if (!redoStack.isEmpty()) {
             List<LyricLine> current = new ArrayList<>();
-            for (LyricLine line : lyricLines) {
-                current.add(new LyricLine(line.getTimeMs(), line.getText()));
-            }
+            for (LyricLine line : lyricLines) current.add(new LyricLine(line.getTimeMs(), line.getText()));
             undoStack.push(current);
-            
             lyricLines.clear();
             lyricLines.addAll(redoStack.pop());
             adapter.notifyDataSetChanged();
             if (selectedIndex != -1) selectLine(Math.min(selectedIndex, lyricLines.size()-1));
-            Toast.makeText(this, "Redo Successful", Toast.LENGTH_SHORT).show();
         } else {
             Toast.makeText(this, "Nothing to Redo", Toast.LENGTH_SHORT).show();
         }
     }
 
     private void scanAudioForWaveform() {
-        // Show loading state
         runOnUiThread(() -> loadingLayout.setVisibility(View.VISIBLE));
-
         Amplituda amplituda = new Amplituda(this);
         amplituda.processAudio(currentSong.songPath)
                 .get(result -> {
-                    // Get amplitudes and scale them for our view
-                    // We want around 3000-4000 points for KineMaster look
                     List<Integer> rawAmplitudes = result.amplitudesAsList();
                     int totalRaw = rawAmplitudes.size();
                     int targetPoints = 4000;
                     float[] finalPeaks = new float[targetPoints];
-
                     for (int i = 0; i < targetPoints; i++) {
                         int rawIndex = (int) ((i / (float) targetPoints) * totalRaw);
                         if (rawIndex < totalRaw) {
-                            float val = rawAmplitudes.get(rawIndex) / 100f; // Amplituda usually returns 0-100
-                            // Apply similar KineMaster-style boost
-                            float exaggerated = (float) Math.pow(val, 0.9f); 
-                            finalPeaks[i] = Math.max(0.015f, Math.min(1.0f, exaggerated * 1.2f));
+                            float val = rawAmplitudes.get(rawIndex) / 100f;
+                            finalPeaks[i] = Math.max(0.015f, Math.min(1.0f, (float) Math.pow(val, 0.9f) * 1.2f));
                         } else {
                             finalPeaks[i] = 0.015f;
                         }
                     }
-
                     runOnUiThread(() -> {
                         waveformView.setAmplitudes(finalPeaks);
                         loadingLayout.setVisibility(View.GONE);
@@ -651,12 +628,6 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
                 });
     }
 
-    private void updatePauseIcon() {
-        if (PlayList_Fragment.mediaPlayer != null) {
-            playPauseBtn.setImageResource(PlayList_Fragment.mediaPlayer.isPlaying() ? R.drawable.pause : R.drawable.play);
-        }
-    }
-
     private void saveToDatabase(boolean showToast) {
         StringBuilder syncedBuilder = new StringBuilder();
         for (LyricLine line : lyricLines) {
@@ -664,11 +635,8 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
             long min = (time / 1000) / 60;
             long sec = (time / 1000) % 60;
             long ms = (time % 1000) / 10;
-            // Standard LRC format [mm:ss.xx]
-            String timestamp = String.format(Locale.US, "[%02d:%02d.%02d]", min, sec, ms);
-            syncedBuilder.append(timestamp).append(line.getText()).append("\n");
+            syncedBuilder.append(String.format(Locale.US, "[%02d:%02d.%02d]", min, sec, ms)).append(line.getText()).append("\n");
         }
-
         FavoritesDatabase db = new FavoritesDatabase(this);
         db.saveLyrics(currentSong.songPath, null, syncedBuilder.toString());
         if (showToast) Toast.makeText(this, "Lyrics Synced & Saved!", Toast.LENGTH_SHORT).show();

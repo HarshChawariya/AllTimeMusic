@@ -4,12 +4,17 @@ import static android.view.View.GONE;
 import static android.view.View.VISIBLE;
 
 import android.Manifest;
+import android.animation.ArgbEvaluator;
+import android.animation.ValueAnimator;
 import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
+import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.content.Context;
 import android.net.ConnectivityManager;
@@ -18,8 +23,6 @@ import android.net.NetworkCapabilities;
 import android.net.NetworkRequest;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
 import android.provider.MediaStore;
 import android.view.View;
 import android.view.ViewGroup;
@@ -33,6 +36,7 @@ import android.widget.Toast;
 
 import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -45,10 +49,17 @@ import androidx.viewpager2.widget.ViewPager2;
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.load.resource.bitmap.CenterCrop;
 import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions;
+import com.bumptech.glide.request.target.CustomTarget;
+import com.bumptech.glide.request.transition.Transition;
+import com.google.android.material.imageview.ShapeableImageView;
+
+import androidx.lifecycle.ViewModelProvider;
+import androidx.media3.common.util.UnstableApi;
 
 import java.util.ArrayList;
 import java.util.Objects;
 
+@UnstableApi
 public class MainActivity extends AppCompatActivity {
     RecyclerView recyclerView;
     TextView alphabet;
@@ -63,26 +74,12 @@ public class MainActivity extends AppCompatActivity {
     private TextView tabItem1, tabItem2;
     private View indicator;
     private ViewPager2 viewPager;
-    private ImageView miniPause, imgThreeDot;
-    private com.google.android.material.imageview.ShapeableImageView miniProfile;
+    private ImageView miniPause;
+    private ShapeableImageView miniProfile;
     private ProgressBar miniProgressBar;
     LinearLayout mainLayout, musicList_LinLayOut, miniPlayer, TabLayout_LinearLayout;
     TextView miniPlayerText;
-
-    private final Handler miniPlayerHandler = new Handler(Looper.getMainLooper());
-    private final Runnable miniPlayerRunnable = new Runnable() {
-        @Override
-        public void run() {
-            if (PlayList_Fragment.mediaPlayer != null && miniPlayer.getVisibility() == VISIBLE) {
-                try {
-                    if (PlayList_Fragment.mediaPlayer.isPlaying()) {
-                        miniProgressBar.setProgress(PlayList_Fragment.mediaPlayer.getCurrentPosition());
-                        miniPlayerHandler.postDelayed(this, 1000);
-                    }
-                } catch (Exception ignored) {}
-            }
-        }
-    };
+    public MusicViewModel musicViewModel;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -102,7 +99,7 @@ public class MainActivity extends AppCompatActivity {
         musicList_LinLayOut = findViewById(R.id.fragment_contained_linLayout);
         TabLayout_LinearLayout = findViewById(R.id.tabLay_LinearLayout);
         ImageView imgBackArrow = findViewById(R.id.img_back_arrow);
-        imgThreeDot = findViewById(R.id.img_three_dot);
+        ImageView imgThreeDot = findViewById(R.id.img_three_dot);
         miniPlayer = findViewById(R.id.miniPlayer);
         miniPlayerText = findViewById(R.id.dialog_txt);
         miniPause = findViewById(R.id.dialog_pause);
@@ -116,33 +113,39 @@ public class MainActivity extends AppCompatActivity {
 
         imgBackArrow.setOnClickListener(v -> handleBackAction());
         miniPlayer.setOnClickListener(v -> openPlayerLayout());
-        miniPause.setOnClickListener(v -> toggleMusic());
+        miniPause.setOnClickListener(v -> { if (musicViewModel != null) musicViewModel.togglePlayPause(); });
+
+        musicViewModel = new ViewModelProvider(this).get(MusicViewModel.class);
+        musicViewModel.initController(this);
+        musicViewModel.setThemeColor(lastDynamicColor);
+        observeViewModel();
 
         imgThreeDot.setOnClickListener(v -> {
             CustomPopupMenu popup = new CustomPopupMenu(this, v);
             popup.setItemTextColor(lastDynamicColor);
             popup.addMenuItem("Plain Lyrics");
             popup.addMenuItem("Synced Lyrics");
-            popup.addMenuItem("Synced Lyrics Editor");
+            popup.addMenuItem("Lyrics Editor");
             
             // Only show Add/Delete Lyrics if we are on the Lyrics tab (index 1)
             if (viewPager.getCurrentItem() == 1) {
-                musicList_Structure current = musicList_Recycler_Adapter.currentItem;
-                if (current != null) {
-                    FavoritesDatabase db = new FavoritesDatabase(this);
-                    String[] lyrics = db.getCachedLyrics(current.songPath);
+                musicList_Structure currentItem = musicList_Recycler_Adapter.currentItem;
+                if (currentItem != null) {
+                    try (FavoritesDatabase db = new FavoritesDatabase(this)) {
+                        String[] lyrics = db.getCachedLyrics(currentItem.songPath);
 
-                    // Logic: Show "Add Lyrics" if either type is missing
-                    boolean hasPlain = (lyrics != null && lyrics[0] != null && !lyrics[0].isEmpty());
-                    boolean hasSynced = (lyrics != null && lyrics[1] != null && !lyrics[1].isEmpty());
+                        // Logic: Show "Add Lyrics" if either type is missing
+                        boolean hasPlain = (lyrics != null && lyrics[0] != null && !lyrics[0].isEmpty());
+                        boolean hasSynced = (lyrics != null && lyrics[1] != null && !lyrics[1].isEmpty());
 
-                    if (!hasPlain || !hasSynced) {
-                        popup.addMenuItem("Add Lyrics");
-                    }
+                        if (!hasPlain || !hasSynced) {
+                            popup.addMenuItem("Add Lyrics");
+                        }
 
-                    // Logic: Show "Delete Lyrics" if any lyrics exist in DB
-                    if (lyrics != null && (hasPlain || hasSynced)) {
-                        popup.addMenuItem("Delete Lyrics");
+                        // Logic: Show "Delete Lyrics" if any lyrics exist in DB
+                        if (lyrics != null && (hasPlain || hasSynced)) {
+                            popup.addMenuItem("Delete Lyrics");
+                        }
                     }
                 }
             }
@@ -152,35 +155,43 @@ public class MainActivity extends AppCompatActivity {
             popup.addMenuItem(modeOption);
 
             popup.setOnItemClickListener(title -> {
-                if (title.equals("Plain Lyrics") || title.equals("Synced Lyrics")) {
-                    boolean isSynced = title.equals("Synced Lyrics");
-                    for (Fragment fragment : getSupportFragmentManager().getFragments()) {
-                        if (fragment instanceof Lyrics_Fragment) {
-                            ((Lyrics_Fragment) fragment).toggleLyricsMode(isSynced);
+                switch (title) {
+                    case "Plain Lyrics":
+                    case "Synced Lyrics":
+                        boolean isSynced = title.equals("Synced Lyrics");
+                        for (Fragment fragment : getSupportFragmentManager().getFragments()) {
+                            if (fragment instanceof Lyrics_Fragment) {
+                                ((Lyrics_Fragment) fragment).toggleLyricsMode(isSynced);
+                            }
                         }
-                    }
-                } else if (title.equals("Add Lyrics")) {
-                    for (Fragment fragment : getSupportFragmentManager().getFragments()) {
-                        if (fragment instanceof Lyrics_Fragment) {
-                            ((Lyrics_Fragment) fragment).openAddLyricsDialog();
+                        break;
+                    case "Add Lyrics":
+                        for (Fragment fragment : getSupportFragmentManager().getFragments()) {
+                            if (fragment instanceof Lyrics_Fragment) {
+                                ((Lyrics_Fragment) fragment).openAddLyricsDialog();
+                            }
                         }
-                    }
-                } else if (title.equals("Delete Lyrics")) {
-                    for (Fragment fragment : getSupportFragmentManager().getFragments()) {
-                        if (fragment instanceof Lyrics_Fragment) {
-                            ((Lyrics_Fragment) fragment).deleteLyricsFromDB();
+                        break;
+                    case "Delete Lyrics":
+                        for (Fragment fragment : getSupportFragmentManager().getFragments()) {
+                            if (fragment instanceof Lyrics_Fragment) {
+                                ((Lyrics_Fragment) fragment).deleteLyricsFromDB();
+                            }
                         }
-                    }
-                } else if (title.equals("Synced Lyrics Editor")) {
-                    for (Fragment fragment : getSupportFragmentManager().getFragments()) {
-                        if (fragment instanceof Lyrics_Fragment) {
-                            ((Lyrics_Fragment) fragment).openSyncedLyricsEditor();
+                        break;
+                    case "Lyrics Editor":
+                        for (Fragment fragment : getSupportFragmentManager().getFragments()) {
+                            if (fragment instanceof Lyrics_Fragment) {
+                                ((Lyrics_Fragment) fragment).openSyncedLyricsEditor();
+                            }
                         }
-                    }
-                } else if (title.equals("Offline Mode") || title.equals("Online Mode")) {
-                    // Manual click: Just show the current state toast as requested
-                    String message = isOfflineMode ? "You're Offline" : "You're Online";
-                    Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+                        break;
+                    case "Offline Mode":
+                    case "Online Mode":
+                        // Manual click: Just show the current state toast as requested
+                        String message = isOfflineMode ? "You're Offline" : "You're Online";
+                        Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+                        break;
                 }
             });
             popup.show(v);
@@ -228,6 +239,34 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    private void observeViewModel() {
+        musicViewModel.getCurrentSong().observe(this, song -> {
+            if (song != null) {
+                miniPlayerText.setText(song.songTitle);
+                miniPlayer.setVisibility(VISIBLE);
+                
+                // INSTANT DIRECT SYNC: Bypass LiveData delay for background
+                Integer cached = MusicViewModel.colorCache.get(song.songPath);
+                if (cached != null) {
+                    applyDynamicColorsToUI(cached);
+                }
+                
+                updateMiniProfileImage(song);
+            }
+        });
+
+        musicViewModel.getIsPlaying().observe(this, isPlaying -> miniPause.setImageResource(isPlaying ? R.drawable.pause : R.drawable.play));
+
+        musicViewModel.getCurrentPosition().observe(this, position -> miniProgressBar.setProgress(position.intValue()));
+
+        musicViewModel.getDuration().observe(this, duration -> miniProgressBar.setMax(duration.intValue()));
+
+        musicViewModel.getThemeColor().observe(this, color -> {
+            applyDynamicColorsToUI(color);
+            lastDynamicColor = color;
+        });
+    }
+
     @Override
     protected void onResume() {
         super.onResume();
@@ -238,16 +277,16 @@ public class MainActivity extends AppCompatActivity {
         }
 
         if (musicList != null && !musicList.isEmpty()) {
-            new FavoritesDatabase(this);
-            for (musicList_Structure song : musicList) {
-                song.isFavourite = FavoritesDatabase.favoriteList.stream()
-                        .anyMatch(fav -> Objects.equals(fav.songPath, song.songPath));
+            try (FavoritesDatabase db = new FavoritesDatabase(this)) {
+                for (musicList_Structure song : musicList) {
+                    song.isFavourite = FavoritesDatabase.favoriteList.stream()
+                            .anyMatch(fav -> Objects.equals(fav.songPath, song.songPath));
+                }
             }
             if (recyclerView.getAdapter() != null) {
                 recyclerView.getAdapter().notifyDataSetChanged();
             }
         }
-        updateMiniPlayer();
         
         if (isReturningFromLiked) {
             isReturningFromLiked = false;
@@ -260,7 +299,6 @@ public class MainActivity extends AppCompatActivity {
         animateStatusBarColor(Color.parseColor("#9D201A"));
         
         closePlayerLayout();
-        updateMiniPlayer();
 
         if (recyclerView.getAdapter() != null) {
             recyclerView.getAdapter().notifyDataSetChanged();
@@ -272,66 +310,18 @@ public class MainActivity extends AppCompatActivity {
      * Synchronized with fragment exit animations for a premium feel.
      */
     private void animateStatusBarColor(int toColor) {
-        int fromColor = getWindow().getStatusBarColor();
-        android.animation.ValueAnimator colorAnimation = android.animation.ValueAnimator.ofObject(
-                new android.animation.ArgbEvaluator(), fromColor, toColor);
-        colorAnimation.setDuration(300); // 300ms duration as requested
-        colorAnimation.addUpdateListener(animator -> {
-            getWindow().setStatusBarColor((int) animator.getAnimatedValue());
-        });
-        colorAnimation.start();
-    }
 
-    private void toggleMusic() {
-        if (PlayList_Fragment.mediaPlayer != null) {
-            if (PlayList_Fragment.mediaPlayer.isPlaying()) {
-                PlayList_Fragment.mediaPlayer.pause();
-            } else {
-                PlayList_Fragment.mediaPlayer.start();
-            }
-            updateMiniPlayer();
-        }
+        int fromColor = getWindow().getStatusBarColor();
+
+        ValueAnimator colorAnimation = ValueAnimator.ofObject(new ArgbEvaluator(), fromColor, toColor);
+
+        colorAnimation.setDuration(300); // 300ms duration as requested
+        colorAnimation.addUpdateListener(animator -> getWindow().setStatusBarColor((int) animator.getAnimatedValue()));
+        colorAnimation.start();
     }
 
     public void switchToPlaylistTab() {
         if (viewPager != null) viewPager.setCurrentItem(0);
-    }
-
-    public void updateRecyclerViewSelection() {
-        if (recyclerView != null && recyclerView.getAdapter() instanceof musicList_Recycler_Adapter) {
-            ((musicList_Recycler_Adapter) recyclerView.getAdapter()).updateSelection(0);
-        }
-    }
-
-    public void updateMiniPlayer() {
-        musicList_Structure current = musicList_Recycler_Adapter.currentItem;
-        if (current != null) {
-            miniPlayerText.setText(current.songTitle);
-            miniPlayer.setVisibility(VISIBLE);
-            
-            updateMiniProfileImage(current);
-            
-            if (PlayList_Fragment.mediaPlayer != null) {
-                miniProgressBar.setMax(PlayList_Fragment.mediaPlayer.getDuration());
-                boolean isPlaying = PlayList_Fragment.mediaPlayer.isPlaying();
-                miniPause.setImageResource(isPlaying ? R.drawable.pause : R.drawable.play);
-                
-                if (isPlaying) {
-                    updateMiniPlayerProgress();
-                } else {
-                    miniProgressBar.setProgress(PlayList_Fragment.mediaPlayer.getCurrentPosition());
-                }
-            }
-
-            for (Fragment fragment : getSupportFragmentManager().getFragments()) {
-                if (fragment instanceof Lyrics_Fragment) {
-                    ((Lyrics_Fragment) fragment).updateLyricsSync(); // BUG FIX: Sync full metadata and lyrics
-                    ((Lyrics_Fragment) fragment).updateMiniPauseIcon();
-                } else if (fragment instanceof PlayList_Fragment) {
-                    ((PlayList_Fragment) fragment).updatePauseIcon();
-                }
-            }
-        }
     }
 
     private void updateMiniProfileImage(musicList_Structure song) {
@@ -346,45 +336,25 @@ public class MainActivity extends AppCompatActivity {
                 .error(R.drawable.profile)
                 .transition(DrawableTransitionOptions.withCrossFade())
                 .transform(new CenterCrop())
-                .into(new com.bumptech.glide.request.target.CustomTarget<android.graphics.drawable.Drawable>() {
+                .into(new CustomTarget<Drawable>() {
                     @Override
-                    public void onResourceReady(@NonNull android.graphics.drawable.Drawable resource, @androidx.annotation.Nullable com.bumptech.glide.request.transition.Transition<? super android.graphics.drawable.Drawable> transition) {
+                    public void onResourceReady(@NonNull Drawable resource, @Nullable Transition<? super Drawable> transition) {
                         miniProfile.setImageDrawable(resource);
 
-                        // Centralized Color Extraction logic moved to MainActivity for better sync
-                        if (resource instanceof android.graphics.drawable.BitmapDrawable) {
-                            android.graphics.Bitmap bitmap = ((android.graphics.drawable.BitmapDrawable) resource).getBitmap();
+                        // OPTIMIZED EXTRACTION: Unified logic with Cache
+                        if (resource instanceof BitmapDrawable) {
+                            Bitmap bitmap = ((BitmapDrawable) resource).getBitmap();
                             if (bitmap != null) {
-                                int width = bitmap.getWidth();
-                                int height = bitmap.getHeight();
-
-                                // Focus on the center area to extract "Mood" colors like Spotify
-                                Palette.from(bitmap)
-                                    .setRegion(width/4, height/4, (3*width)/4, (3*height)/4)
-                                    .generate(palette -> {
-                                        if (palette != null) {
-                                            int defaultValue = 0xFF9D201A;
-                                            
-                                            // Priority selection for the most atmospheric color
-                                            androidx.palette.graphics.Palette.Swatch bestSwatch = palette.getVibrantSwatch();
-                                            if (bestSwatch == null) bestSwatch = palette.getDominantSwatch();
-                                            if (bestSwatch == null) bestSwatch = palette.getDarkVibrantSwatch();
-
-                                            int targetColor = (bestSwatch != null) ? bestSwatch.getRgb() : defaultValue;
-
-                                            // HSV Post-processing: Boosting vibrance like Spotify "Mood" backgrounds
-                                            float[] hsv = new float[3];
-                                            Color.colorToHSV(targetColor, hsv);
-                                            
-                                            // Increase saturation for a more vivid look (1.3x boost)
-                                            hsv[1] = Math.min(hsv[1] * 1.3f, 0.85f); 
-                                            // Adjust brightness range for a deeper but more "glowy" effect
-                                            hsv[2] = Math.max(Math.min(hsv[2], 0.45f), 0.18f);
-
-                                            int finalColor = Color.HSVToColor(hsv);
-                                            applyDynamicColorsToUI(finalColor);
-                                        }
-                                    });
+                                Integer cached = MusicViewModel.colorCache.get(song.songPath);
+                                if (cached != null) {
+                                    musicViewModel.setThemeColor(cached);
+                                } else {
+                                    new Thread(() -> {
+                                        int finalColor = MusicViewModel.extractThemeColor(bitmap);
+                                        MusicViewModel.colorCache.put(song.songPath, finalColor);
+                                        musicViewModel.setThemeColor(finalColor);
+                                    }).start();
+                                }
                             }
                         }
 /*hsv[1] = Math.min(hsv[1] * 1.1f, 0.75f);
@@ -396,48 +366,45 @@ hsv[2] = Math.max(Math.min(hsv[2], 0.35f), 0.15f);*/
                     }
 
                     @Override
-                    public void onLoadCleared(@androidx.annotation.Nullable android.graphics.drawable.Drawable placeholder) {
+                    public void onLoadCleared(@Nullable Drawable placeholder) {
                         miniProfile.setImageDrawable(placeholder);
                     }
 
                     @Override
-                    public void onLoadFailed(@androidx.annotation.Nullable android.graphics.drawable.Drawable errorDrawable) {
+                    public void onLoadFailed(@Nullable Drawable errorDrawable) {
                         miniProfile.setImageDrawable(errorDrawable);
                         setDefaultMiniProfile();
                         
                         // Set Default Theme Color if album art is missing
-                        applyDynamicColorsToUI(Color.parseColor("#9D201A"));
+                        if (musicViewModel != null) {
+                            musicViewModel.setThemeColor(Color.parseColor("#9D201A"));
+                        }
                     }
                 });
     }
 
     /**
      * Applies the extracted color to the main container and all active fragments.
-     * This ensures a perfectly synced UI across the entire Player screen.
+     * Uses a smooth animation to permanently eliminate the "flicking" effect.
      */
-    private void applyDynamicColorsToUI(int color) {
-        lastDynamicColor = color;
+    private void applyDynamicColorsToUI(int targetColor) {
+        if (musicList_LinLayOut == null) return;
+        
+        int fromColor = lastDynamicColor;
+        lastDynamicColor = targetColor;
 
-        // 1. Update the main fragment container background (Top layer of the app)
-        if (musicList_LinLayOut != null) {
-            musicList_LinLayOut.setBackgroundColor(color);
-        }
-
-        // 2. Sync Status Bar based on visibility
-        if (TabLayout_LinearLayout != null) {
+        // Animate the background transition for a premium feel
+        ValueAnimator anim = ValueAnimator.ofObject(new ArgbEvaluator(), fromColor, targetColor);
+        anim.setDuration(300); // Smooth 300ms transition
+        anim.addUpdateListener(animation -> {
+            int animatedColor = (int) animation.getAnimatedValue();
+            musicList_LinLayOut.setBackgroundColor(animatedColor);
+            
             if (mainLayout.getVisibility() == GONE) {
-                getWindow().setStatusBarColor(color);
+                getWindow().setStatusBarColor(animatedColor);
             }
-        }
-
-        // 3. Notify active fragments to update their internal views dynamically
-        for (Fragment fragment : getSupportFragmentManager().getFragments()) {
-            if (fragment instanceof Lyrics_Fragment) {
-                ((Lyrics_Fragment) fragment).updateInternalColors(color);
-            } else if (fragment instanceof PlayList_Fragment) {
-                ((PlayList_Fragment) fragment).updateInternalColors(color);
-            }
-        }
+        });
+        anim.start();
     }
 
     private void setDefaultMiniProfile() {
@@ -451,7 +418,6 @@ hsv[2] = Math.max(Math.min(hsv[2], 0.35f), 0.15f);*/
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        miniPlayerHandler.removeCallbacks(miniPlayerRunnable);
         if (connectivityManager != null && networkCallback != null) {
             connectivityManager.unregisterNetworkCallback(networkCallback);
         }
@@ -501,7 +467,9 @@ hsv[2] = Math.max(Math.min(hsv[2], 0.35f), 0.15f);*/
     private void checkCurrentNetworkStatus() {
         if (connectivityManager != null) {
             NetworkCapabilities capabilities = connectivityManager.getNetworkCapabilities(connectivityManager.getActiveNetwork());
+
             boolean hasInternet = capabilities != null && capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET);
+
             isOfflineMode = !hasInternet;
         }
     }
@@ -514,27 +482,44 @@ hsv[2] = Math.max(Math.min(hsv[2], 0.35f), 0.15f);*/
             }
         }
     }
-    
-    public void updateMiniPlayerProgress() {
-        miniPlayerHandler.removeCallbacks(miniPlayerRunnable);
-        miniPlayerHandler.post(miniPlayerRunnable);
-    }
 
     public void openPlayerLayout() {
+        musicList_Structure current = musicList_Recycler_Adapter.currentItem;
+        if (current != null) {
+            // INSTANT DIRECT SYNC: Apply color before making layout visible
+            Integer cached = MusicViewModel.colorCache.get(current.songPath);
+            if (cached != null) {
+                // If cached, update lastDynamicColor immediately to avoid animation lag on open
+                lastDynamicColor = cached;
+                musicList_LinLayOut.setBackgroundColor(cached);
+                musicViewModel.setThemeColor(cached);
+            } else {
+                musicViewModel.updateThemeColorInstant(current.songPath);
+            }
+            
+            // PUSH METADATA IMMEDIATELY: Don't wait for MediaController transition
+            musicViewModel.setCurrentSong(current);
+        }
+
         if (miniPlayer != null) miniPlayer.setVisibility(GONE);
         mainLayout.setVisibility(GONE);
         musicList_LinLayOut.setVisibility(VISIBLE);
-        
-        // Sync immediate background color when player opens
-        applyDynamicColorsToUI(lastDynamicColor);
 
         displayTabLayOut();
 
+        // Trigger Playback if needed
+        if (musicViewModel != null && musicList_Recycler_Adapter.fullMusicList != null) {
+            musicViewModel.playPlaylist(
+                musicList_Recycler_Adapter.fullMusicList,
+                musicList_Recycler_Adapter.currentPosition
+            );
+        }
+
         for (Fragment fragment : getSupportFragmentManager().getFragments()) {
-            if (fragment instanceof PlayList_Fragment) {
-                ((PlayList_Fragment) fragment).updateSongFromAdapter();
-            } else if (fragment instanceof Lyrics_Fragment) {
-                ((Lyrics_Fragment) fragment).updateLyricsSync();
+            if (fragment instanceof Lyrics_Fragment) {
+                if (current != null) {
+                    ((Lyrics_Fragment) fragment).updateLyricsSync(current);
+                }
             }
         }
     }
@@ -558,15 +543,25 @@ hsv[2] = Math.max(Math.min(hsv[2], 0.35f), 0.15f);*/
 
     private boolean checkPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            return ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_AUDIO) == PackageManager.PERMISSION_GRANTED;
+            boolean audio = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_AUDIO) == PackageManager.PERMISSION_GRANTED;
+            boolean notifications = ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED;
+            return audio && notifications;
         } else {
             return ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
         }
     }
 
     private void requestPermission() {
-        String permission = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) ? Manifest.permission.READ_MEDIA_AUDIO : Manifest.permission.READ_EXTERNAL_STORAGE;
-        ActivityCompat.requestPermissions(this, new String[]{permission}, PERMISSION_REQUEST_CODE);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ActivityCompat.requestPermissions(this, new String[]{
+                    Manifest.permission.READ_MEDIA_AUDIO,
+                    Manifest.permission.POST_NOTIFICATIONS
+            }, PERMISSION_REQUEST_CODE);
+        } else {
+            ActivityCompat.requestPermissions(this, new String[]{
+                    Manifest.permission.READ_EXTERNAL_STORAGE
+            }, PERMISSION_REQUEST_CODE);
+        }
     }
 
     @Override
@@ -630,6 +625,10 @@ hsv[2] = Math.max(Math.min(hsv[2], 0.35f), 0.15f);*/
         if (viewPager.getAdapter() == null) {
             ViewPager2Adapter adapter = new ViewPager2Adapter(this);
             viewPager.setAdapter(adapter);
+            
+            // BUG FIX: Preload both tabs so menu actions (Lyrics Editor, etc.) work from the start
+            viewPager.setOffscreenPageLimit(1);
+
             tabItem1.setOnClickListener(v -> viewPager.setCurrentItem(0));
             tabItem2.setOnClickListener(v -> viewPager.setCurrentItem(1));
 

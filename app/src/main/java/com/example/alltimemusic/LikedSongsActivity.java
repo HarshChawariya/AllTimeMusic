@@ -1,9 +1,8 @@
 package com.example.alltimemusic;
 
 import android.content.ContentUris;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.media.MediaMetadataRetriever;
+import android.graphics.drawable.Drawable;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -16,14 +15,21 @@ import android.widget.TextView;
 
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.load.resource.bitmap.CenterCrop;
+import com.bumptech.glide.request.target.CustomTarget;
+import com.bumptech.glide.request.transition.Transition;
+import com.google.android.material.imageview.ShapeableImageView;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.lifecycle.ViewModelProvider;
+import androidx.media3.common.util.UnstableApi;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import java.util.ArrayList;
 
+@UnstableApi
 public class LikedSongsActivity extends AppCompatActivity {
 
     RecyclerView recyclerView;
@@ -33,34 +39,13 @@ public class LikedSongsActivity extends AppCompatActivity {
     private LinearLayout miniPlayer;
     private TextView miniPlayerText;
     private ImageView miniPause;
-    private com.google.android.material.imageview.ShapeableImageView miniProfile;
+    private ShapeableImageView miniProfile;
     private ProgressBar miniProgressBar;
+    private MusicViewModel musicViewModel;
 
     private final Handler miniPlayerHandler = new Handler(Looper.getMainLooper());
-    private final Runnable miniPlayerRunnable = new Runnable() {
-        @Override
-        public void run() {
-            if (PlayList_Fragment.mediaPlayer != null && miniPlayer.getVisibility() == View.VISIBLE) {
-                try {
-                    int currentPos = PlayList_Fragment.mediaPlayer.getCurrentPosition();
-                    int duration = PlayList_Fragment.mediaPlayer.getDuration();
-                    
-                    miniProgressBar.setProgress(currentPos);
-                    
-                    // Update Icon based on playing state
-                    if (PlayList_Fragment.mediaPlayer.isPlaying()) {
-                        miniPause.setImageResource(R.drawable.pause);
-                    } else {
-                        miniPause.setImageResource(R.drawable.play);
-                        // If song ended, ensure progress bar is 100%
-                        if (currentPos >= duration - 1000) {
-                            miniProgressBar.setProgress(duration);
-                        }
-                    }
-                } catch (Exception ignored) {}
-            }
-            miniPlayerHandler.postDelayed(this, 1000); // Always run while activity is active
-        }
+    private final Runnable miniPlayerRunnable = () -> {
+        // Logic moved to ViewModel observation
     };
 
     @Override
@@ -91,17 +76,32 @@ public class LikedSongsActivity extends AppCompatActivity {
 
         miniPause.setOnClickListener(v -> toggleMusic());
 
+        musicViewModel = new ViewModelProvider(this).get(MusicViewModel.class);
+        musicViewModel.initController(this);
+        observeViewModel();
+
         loadLikedSongs();
     }
 
-    private void toggleMusic() {
-        if (PlayList_Fragment.mediaPlayer != null) {
-            if (PlayList_Fragment.mediaPlayer.isPlaying()) {
-                PlayList_Fragment.mediaPlayer.pause();
-            } else {
-                PlayList_Fragment.mediaPlayer.start();
+    private void observeViewModel() {
+        musicViewModel.getCurrentSong().observe(this, song -> {
+            if (song != null) {
+                miniPlayerText.setText(song.songTitle);
+                miniPlayer.setVisibility(View.VISIBLE);
+                updateMiniProfileImage(song);
             }
-            updateMiniPlayer();
+        });
+
+        musicViewModel.getIsPlaying().observe(this, isPlaying -> miniPause.setImageResource(isPlaying ? R.drawable.pause : R.drawable.play));
+
+        musicViewModel.getCurrentPosition().observe(this, pos -> miniProgressBar.setProgress(pos.intValue()));
+
+        musicViewModel.getDuration().observe(this, dur -> miniProgressBar.setMax(dur.intValue()));
+    }
+
+    private void toggleMusic() {
+        if (musicViewModel != null) {
+            musicViewModel.togglePlayPause();
         }
     }
 
@@ -113,15 +113,6 @@ public class LikedSongsActivity extends AppCompatActivity {
             
             // Dynamic mini profile image update
             updateMiniProfileImage(current);
-            
-            if (PlayList_Fragment.mediaPlayer != null) {
-                miniProgressBar.setMax(PlayList_Fragment.mediaPlayer.getDuration());
-                if (PlayList_Fragment.mediaPlayer.isPlaying()) {
-                    miniPause.setImageResource(R.drawable.pause);
-                } else {
-                    miniPause.setImageResource(R.drawable.play);
-                }
-            }
         } else {
             miniPlayer.setVisibility(View.GONE);
         }
@@ -130,8 +121,8 @@ public class LikedSongsActivity extends AppCompatActivity {
     private void updateMiniProfileImage(musicList_Structure song) {
         if (miniProfile == null || song == null) return;
 
-        android.net.Uri sArtworkUri = android.net.Uri.parse("content://media/external/audio/albumart");
-        android.net.Uri uri = android.content.ContentUris.withAppendedId(sArtworkUri, song.albumId);
+        Uri sArtworkUri = Uri.parse("content://media/external/audio/albumart");
+        Uri uri = ContentUris.withAppendedId(sArtworkUri, song.albumId);
 
         // Use Glide for efficient loading in mini player
         Glide.with(this)
@@ -139,9 +130,9 @@ public class LikedSongsActivity extends AppCompatActivity {
                 .placeholder(R.drawable.profile)
                 .error(R.drawable.profile)
                 .transform(new CenterCrop())
-                .into(new com.bumptech.glide.request.target.CustomTarget<android.graphics.drawable.Drawable>() {
+                .into(new CustomTarget<Drawable>() {
                     @Override
-                    public void onResourceReady(@NonNull android.graphics.drawable.Drawable resource, @androidx.annotation.Nullable com.bumptech.glide.request.transition.Transition<? super android.graphics.drawable.Drawable> transition) {
+                    public void onResourceReady(@NonNull Drawable resource, @Nullable Transition<? super Drawable> transition) {
                         miniProfile.setImageDrawable(resource);
                         // Dynamically set to Match Parent for real images to fill the mini player container (50dp)
                         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
@@ -152,12 +143,12 @@ public class LikedSongsActivity extends AppCompatActivity {
                     }
 
                     @Override
-                    public void onLoadCleared(@androidx.annotation.Nullable android.graphics.drawable.Drawable placeholder) {
+                    public void onLoadCleared(@Nullable Drawable placeholder) {
                         miniProfile.setImageDrawable(placeholder);
                     }
 
                     @Override
-                    public void onLoadFailed(@androidx.annotation.Nullable android.graphics.drawable.Drawable errorDrawable) {
+                    public void onLoadFailed(@Nullable Drawable errorDrawable) {
                         miniProfile.setImageDrawable(errorDrawable);
                         setDefaultMiniProfile();
                     }
