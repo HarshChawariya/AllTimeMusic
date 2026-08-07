@@ -135,7 +135,8 @@
         android:layout_height="100dp"
         android:layout_gravity="bottom"
         android:orientation="horizontal"
-        android:padding="11dp">
+        android:padding="11dp"
+        android:gravity="center_vertical">
 
         <ImageView
             android:id="@+id/loopButton"

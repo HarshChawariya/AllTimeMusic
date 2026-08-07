@@ -215,6 +215,11 @@ public class PlayList_Fragment extends Fragment {
         pause = view.findViewById(R.id.pause);
         previous = view.findViewById(R.id.previous);
         next = view.findViewById(R.id.next);
+        
+        // Use original icons
+        previous.setImageResource(R.drawable.previous);
+        next.setImageResource(R.drawable.next);
+
         favButton = view.findViewById(R.id.favButton);
         loopButton = view.findViewById(R.id.loopButton);
         profile = view.findViewById(R.id.profile);
@@ -295,7 +300,9 @@ public class PlayList_Fragment extends Fragment {
             }
         });
 
-        musicViewModel.getIsPlaying().observe(getViewLifecycleOwner(), isPlaying -> pause.setImageResource(isPlaying ? R.drawable.pause : R.drawable.play));
+        musicViewModel.getIsPlaying().observe(getViewLifecycleOwner(), isPlaying -> {
+            pause.setImageResource(isPlaying ? R.drawable.pause : R.drawable.play);
+        });
 
         musicViewModel.getThemeColor().observe(getViewLifecycleOwner(), this::updateInternalColors);
 

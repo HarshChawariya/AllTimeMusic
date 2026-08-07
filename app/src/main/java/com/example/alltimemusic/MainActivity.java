@@ -245,6 +245,17 @@ public class MainActivity extends AppCompatActivity {
                 miniPlayerText.setText(song.songTitle);
                 miniPlayer.setVisibility(VISIBLE);
                 
+                // HIGHLIGHT SYNC: Update RecyclerView selection instantly
+                if (recyclerView != null && recyclerView.getAdapter() instanceof musicList_Recycler_Adapter) {
+                    ((musicList_Recycler_Adapter) recyclerView.getAdapter()).updateHighlightedSong(song);
+                }
+                
+                // CRITICAL FIX: Ensure MiniPlayer is visible if a song exists,
+                // BUT only if the main list is currently showing (Player is hidden)
+                if (musicList_LinLayOut.getVisibility() == GONE) {
+                    miniPlayer.setVisibility(VISIBLE);
+                }
+                
                 // INSTANT DIRECT SYNC: Bypass LiveData delay for background
                 Integer cached = MusicViewModel.colorCache.get(song.songPath);
                 if (cached != null) {
@@ -299,6 +310,11 @@ public class MainActivity extends AppCompatActivity {
         animateStatusBarColor(Color.parseColor("#9D201A"));
         
         closePlayerLayout();
+
+        // BUG FIX: Re-show MiniPlayer when returning to list if a song is active
+        if (musicViewModel != null && musicViewModel.getCurrentSong().getValue() != null) {
+            miniPlayer.setVisibility(VISIBLE);
+        }
 
         if (recyclerView.getAdapter() != null) {
             recyclerView.getAdapter().notifyDataSetChanged();
@@ -400,7 +416,8 @@ hsv[2] = Math.max(Math.min(hsv[2], 0.35f), 0.15f);*/
             int animatedColor = (int) animation.getAnimatedValue();
             musicList_LinLayOut.setBackgroundColor(animatedColor);
             
-            if (mainLayout.getVisibility() == GONE) {
+            // Sync status bar ONLY if player is visible to avoid affecting list view prematurely
+            if (musicList_LinLayOut.getVisibility() == VISIBLE) {
                 getWindow().setStatusBarColor(animatedColor);
             }
         });
@@ -489,10 +506,11 @@ hsv[2] = Math.max(Math.min(hsv[2], 0.35f), 0.15f);*/
             // INSTANT DIRECT SYNC: Apply color before making layout visible
             Integer cached = MusicViewModel.colorCache.get(current.songPath);
             if (cached != null) {
-                // If cached, update lastDynamicColor immediately to avoid animation lag on open
+                // Apply cached color IMMEDIATELY to eliminate "9D201A" flash
                 lastDynamicColor = cached;
                 musicList_LinLayOut.setBackgroundColor(cached);
                 musicViewModel.setThemeColor(cached);
+                getWindow().setStatusBarColor(cached);
             } else {
                 musicViewModel.updateThemeColorInstant(current.songPath);
             }
@@ -589,6 +607,7 @@ hsv[2] = Math.max(Math.min(hsv[2], 0.35f), 0.15f);*/
                 int dataCol = cursor.getColumnIndex(MediaStore.Audio.Media.DATA);
                 int artistCol = cursor.getColumnIndex(MediaStore.Audio.Media.ARTIST);
                 int albumIdCol = cursor.getColumnIndex(MediaStore.Audio.Media.ALBUM_ID);
+                int durationCol = cursor.getColumnIndex(MediaStore.Audio.Media.DURATION);
                 int displayCol = cursor.getColumnIndex(MediaStore.Audio.Media.DISPLAY_NAME);
 
                 new FavoritesDatabase(this);
@@ -598,12 +617,13 @@ hsv[2] = Math.max(Math.min(hsv[2], 0.35f), 0.15f);*/
                     String path = cursor.getString(dataCol);
                     String artist = cursor.getString(artistCol);
                     long albumId = cursor.getLong(albumIdCol);
+                    long durationMs = cursor.getLong(durationCol);
                     String displayName = cursor.getString(displayCol);
 
                     if (displayName != null && !displayName.isEmpty()) {
                         String name = displayName.toLowerCase();
                         if (name.endsWith(".mp3") && !name.startsWith(".") && !Character.isDigit(name.charAt(0)) && Character.isAlphabetic(name.charAt(0))) {
-                            musicList_Structure song = new musicList_Structure(title, path, artist, albumId);
+                            musicList_Structure song = new musicList_Structure(title, path, artist, albumId, durationMs);
                             song.isFavourite = FavoritesDatabase.favoriteList.stream().anyMatch(f -> Objects.equals(f.songPath, path));
                             musicList.add(song);
                         }

@@ -1,9 +1,14 @@
 package com.example.alltimemusic;
 
+import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.ContentUris;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.SharedPreferences;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.widget.Toast;
@@ -51,6 +56,10 @@ public class MusicViewModel extends ViewModel {
     private MediaController mediaController;
     private ListenableFuture<MediaController> controllerFuture;
     private Context appContext;
+    private SharedPreferences sharedPreferences;
+
+    private static final String PREF_NAME = "AllTimeMusicPrefs";
+    private static final String KEY_LOOP_MODE = "saved_loop_mode";
 
     private final Handler progressHandler = new Handler(Looper.getMainLooper());
     private final Runnable progressRunnable = new Runnable() {
@@ -59,7 +68,17 @@ public class MusicViewModel extends ViewModel {
             if (mediaController != null && mediaController.isPlaying()) {
                 long pos = mediaController.getCurrentPosition();
                 setCurrentPosition(pos);
-                progressHandler.postDelayed(this, 50); // 50ms for smooth UI (Waveforms/Seekbar)
+                progressHandler.postDelayed(this, 500); // 500ms for stable general UI
+            }
+        }
+    };
+
+    private BroadcastReceiver favReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            musicList_Structure current = currentSong.getValue();
+            if (current != null) {
+                setCurrentSong(current); // Re-trigger DB check and LiveData update
             }
         }
     };
@@ -67,6 +86,12 @@ public class MusicViewModel extends ViewModel {
     public void initController(Context context) {
         if (mediaController != null) return;
         this.appContext = context.getApplicationContext();
+        this.sharedPreferences = appContext.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+
+        // Register for favorite changes from notification
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            appContext.registerReceiver(favReceiver, new IntentFilter("FAV_CHANGED"), Context.RECEIVER_EXPORTED);
+        }
 
         SessionToken sessionToken = new SessionToken(context, new ComponentName(context, MusicService.class));
 
@@ -84,11 +109,22 @@ public class MusicViewModel extends ViewModel {
     private void setupControllerListener() {
         if (mediaController == null) return;
 
+        // Restore saved Loop Mode from SharedPreferences on initialization
+        int savedMode = sharedPreferences.getInt(KEY_LOOP_MODE, 0);
+        setLoopMode(savedMode);
+
         updateStateFromController();
 
         mediaController.addListener(new Player.Listener() {
             @Override
             public void onMediaItemTransition(@Nullable MediaItem mediaItem, int reason) {
+                // BUG FIX: If Loop Mode is "Off" (0), stay on the SAME song and pause after completion
+                if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO && loopMode.getValue() != null && loopMode.getValue() == 0) {
+                    mediaController.pause();
+                    mediaController.seekToPreviousMediaItem();
+                    mediaController.seekTo(0); // Reset to start for re-play
+                    return; 
+                }
                 updateStateFromController();
             }
 
@@ -110,6 +146,19 @@ public class MusicViewModel extends ViewModel {
         setIsPlaying(mediaController.isPlaying());
         setDuration(mediaController.getDuration());
         setCurrentPosition(mediaController.getCurrentPosition());
+
+        // Sync Loop Mode from Controller state to UI
+        int rMode = mediaController.getRepeatMode();
+        boolean sEnabled = mediaController.getShuffleModeEnabled();
+        int lMode = 0;
+        if (sEnabled) lMode = 3;
+        else if (rMode == Player.REPEAT_MODE_ONE) lMode = 1;
+        else if (rMode == Player.REPEAT_MODE_ALL) lMode = 2;
+        else lMode = 0;
+        
+        if (loopMode.getValue() == null || loopMode.getValue() != lMode) {
+            setLoopModeLiveData(lMode);
+        }
 
         MediaItem mediaItem = mediaController.getCurrentMediaItem();
         if (mediaItem != null) {
@@ -140,13 +189,20 @@ public class MusicViewModel extends ViewModel {
             currentSong.postValue(song);
         }
         
-        if (song != null && appContext != null) {
-            try (FavoritesDatabase db = new FavoritesDatabase(appContext)) {
-                boolean isFav = db.isFavorite(song.songPath);
-                if (Looper.myLooper() == Looper.getMainLooper()) {
-                    isCurrentSongFavourite.setValue(isFav);
-                } else {
-                    isCurrentSongFavourite.postValue(isFav);
+        if (song != null) {
+            // PUSH DURATION IMMEDIATELY: Ensure UI (textSeek2) is updated without lag
+            if (song.durationMs > 0) {
+                setDuration(song.durationMs);
+            }
+
+            if (appContext != null) {
+                try (FavoritesDatabase db = new FavoritesDatabase(appContext)) {
+                    boolean isFav = db.isFavorite(song.songPath);
+                    if (Looper.myLooper() == Looper.getMainLooper()) {
+                        isCurrentSongFavourite.setValue(isFav);
+                    } else {
+                        isCurrentSongFavourite.postValue(isFav);
+                    }
                 }
             }
         }
@@ -224,7 +280,13 @@ public class MusicViewModel extends ViewModel {
     }
 
     public void setLoopMode(int mode) {
-        loopMode.postValue(mode);
+        setLoopModeLiveData(mode);
+        
+        // Persist mode to SharedPreferences
+        if (sharedPreferences != null) {
+            sharedPreferences.edit().putInt(KEY_LOOP_MODE, mode).apply();
+        }
+
         if (mediaController == null) return;
         switch (mode) {
             case 0: // No Loop
@@ -243,6 +305,14 @@ public class MusicViewModel extends ViewModel {
                 mediaController.setRepeatMode(Player.REPEAT_MODE_ALL);
                 mediaController.setShuffleModeEnabled(true);
                 break;
+        }
+    }
+
+    private void setLoopModeLiveData(int mode) {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            loopMode.setValue(mode);
+        } else {
+            loopMode.postValue(mode);
         }
     }
 
@@ -280,11 +350,63 @@ public class MusicViewModel extends ViewModel {
     }
 
     public void addToPlayNext(musicList_Structure song) {
-        if (mediaController != null) {
-            int nextIndex = mediaController.getCurrentMediaItemIndex() + 1;
-            mediaController.addMediaItem(nextIndex, createMediaItem(song));
-            Toast.makeText(appContext, "Playing next: " + song.songTitle, Toast.LENGTH_SHORT).show();
+        if (mediaController == null) return;
+
+        // If player is idle or empty, start playing the song immediately
+        if (mediaController.getMediaItemCount() == 0) {
+            ArrayList<musicList_Structure> single = new ArrayList<>();
+            single.add(song);
+            playPlaylist(single, 0);
+            return;
         }
+
+        int currentIndex = mediaController.getCurrentMediaItemIndex();
+        int nextIndex = currentIndex + 1;
+        
+        // BUG FIX: Prevent Duplication. If song exists, reorder it to "Next" position.
+        int existingIndex = -1;
+        if (MusicService.songs != null) {
+            for (int i = 0; i < MusicService.songs.size(); i++) {
+                if (MusicService.songs.get(i).songPath.equals(song.songPath)) {
+                    existingIndex = i;
+                    break;
+                }
+            }
+        }
+
+        if (existingIndex != -1) {
+            if (existingIndex == currentIndex) {
+                Toast.makeText(appContext, "Already playing this song", Toast.LENGTH_SHORT).show();
+            } else {
+                // Move item in native queue
+                mediaController.moveMediaItem(existingIndex, nextIndex);
+                
+                // Sync static metadata list
+                if (MusicService.songs != null) {
+                    musicList_Structure item = MusicService.songs.remove(existingIndex);
+                    // Adjust target index if removal shifted the list
+                    int target = (existingIndex < nextIndex) ? nextIndex - 1 : nextIndex;
+                    MusicService.songs.add(target, item);
+                }
+                Toast.makeText(appContext, "Moved to Play Next: " + song.songTitle, Toast.LENGTH_SHORT).show();
+            }
+        } else {
+            // New item addition
+            mediaController.addMediaItem(nextIndex, createMediaItem(song));
+            if (MusicService.songs != null) {
+                MusicService.songs.add(nextIndex, song);
+            }
+            Toast.makeText(appContext, "Added to Play Next: " + song.songTitle, Toast.LENGTH_SHORT).show();
+        }
+
+        // If player was paused or ended, start playing the newly queued song
+        if (!mediaController.isPlaying()) {
+            mediaController.play();
+        }
+        
+        // Refresh UI lists across activities
+        android.content.Intent intent = new android.content.Intent("LIST_CHANGED");
+        appContext.sendBroadcast(intent);
     }
 
     public void seekTo(long position) { if (mediaController != null) mediaController.seekTo(position); }
@@ -323,14 +445,16 @@ public class MusicViewModel extends ViewModel {
     }
 
     private MediaItem createMediaItem(musicList_Structure song) {
-
-        Uri sArtworkUri = Uri.parse("content://media/external/audio/albumart");
-        Uri artworkUri = ContentUris.withAppendedId(sArtworkUri, song.albumId);
+        Uri artworkUri = null;
+        if (song.albumId > 0) {
+            Uri sArtworkUri = Uri.parse("content://media/external/audio/albumart");
+            artworkUri = ContentUris.withAppendedId(sArtworkUri, song.albumId);
+        }
 
         MediaMetadata metadata = new MediaMetadata.Builder()
                 .setTitle(song.songTitle)
                 .setArtist(song.artistName)
-                .setArtworkUri(artworkUri)
+                .setArtworkUri(artworkUri) // Explicitly setting to null if no ID exists clears previous art
                 .build();
 
         return new MediaItem.Builder()
@@ -351,5 +475,11 @@ public class MusicViewModel extends ViewModel {
     }
 
     @Override
-    protected void onCleared() { super.onCleared(); stopProgressUpdates(); }
+    protected void onCleared() {
+        super.onCleared();
+        stopProgressUpdates();
+        if (appContext != null && favReceiver != null) {
+            appContext.unregisterReceiver(favReceiver);
+        }
+    }
 }

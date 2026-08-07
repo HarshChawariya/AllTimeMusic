@@ -41,7 +41,7 @@ public class LikedSongsActivity extends AppCompatActivity {
     private ImageView miniPause;
     private ShapeableImageView miniProfile;
     private ProgressBar miniProgressBar;
-    private MusicViewModel musicViewModel;
+    public MusicViewModel musicViewModel;
 
     private final Handler miniPlayerHandler = new Handler(Looper.getMainLooper());
     private final Runnable miniPlayerRunnable = () -> {
@@ -88,6 +88,12 @@ public class LikedSongsActivity extends AppCompatActivity {
             if (song != null) {
                 miniPlayerText.setText(song.songTitle);
                 miniPlayer.setVisibility(View.VISIBLE);
+                
+                // HIGHLIGHT SYNC: Keep Fav list coordinated with main playback
+                if (recyclerView != null && recyclerView.getAdapter() instanceof musicList_Recycler_Adapter) {
+                    ((musicList_Recycler_Adapter) recyclerView.getAdapter()).updateHighlightedSong(song);
+                }
+
                 updateMiniProfileImage(song);
             }
         });

@@ -8,6 +8,7 @@ public class musicList_Structure implements Serializable {
     public String songPath;
     public String artistName;
     public long albumId; // Store Album ID for high-performance Glide loading
+    public long durationMs = 0; // Pre-calculated duration for zero-lag UI
     public boolean isFavourite = false;
 
     public musicList_Structure(String songTitle, String songPath, String artistName, long albumId) {
@@ -15,6 +16,14 @@ public class musicList_Structure implements Serializable {
         this.songPath = songPath;
         this.artistName = artistName;
         this.albumId = albumId;
+    }
+
+    public musicList_Structure(String songTitle, String songPath, String artistName, long albumId, long durationMs) {
+        this.songTitle = songTitle;
+        this.songPath = songPath;
+        this.artistName = artistName;
+        this.albumId = albumId;
+        this.durationMs = durationMs;
     }
 
     public String getCleanArtist() {

@@ -36,14 +36,18 @@ public class musicList_Recycler_Adapter extends RecyclerView.Adapter<musicList_R
     private int selectedPosition = -1;
     private final Context context;
     private final ArrayList<musicList_Structure> musicList;
-    public static musicList_Structure currentItem;
-    public static ArrayList<musicList_Structure> fullMusicList;
-    public static int currentPosition;
+    private musicList_Structure playingItem;
 
     public musicList_Recycler_Adapter(Context context, ArrayList<musicList_Structure> musicList) {
         this.context = context;
         this.musicList = musicList;
+        // Initialize from global state if available
+        this.playingItem = currentItem;
     }
+
+    public static musicList_Structure currentItem;
+    public static ArrayList<musicList_Structure> fullMusicList;
+    public static int currentPosition;
 
     @NonNull
     @Override
@@ -72,16 +76,13 @@ public class musicList_Recycler_Adapter extends RecyclerView.Adapter<musicList_R
 
         setAnimation(holder.itemView, position);
 
-        // Selection Highlight
-        boolean isCurrentPlaying = false;
-        if (currentItem != null && item.songPath.equals(currentItem.songPath)) {
-            isCurrentPlaying = true;
-            selectedPosition = position; // Update internal selection for this list context
-        }
+        // Reactive Selection Highlight: Check if this item is the one currently playing globally
+        boolean isCurrentPlaying = (playingItem != null && item.songPath.equals(playingItem.songPath));
 
         if (isCurrentPlaying) {
             holder.songTitles.setTextColor(Color.RED);
             holder.artistNames.setTextColor(Color.RED);
+            selectedPosition = position;
         } else {
             holder.songTitles.setTextColor(Color.WHITE);
             holder.artistNames.setTextColor(Color.parseColor("#C1BDBD"));
@@ -148,12 +149,16 @@ public class musicList_Recycler_Adapter extends RecyclerView.Adapter<musicList_R
                     
                     musicList_Structure selectedSong = musicList.get(currentIdx);
                     
-                    MainActivity activity = (context instanceof MainActivity) ? (MainActivity) context : null;
-                    if (activity != null && activity.musicViewModel != null) {
-                        activity.musicViewModel.addToPlayNext(selectedSong);
-                    } else {
-                        MusicService.arrPlayNext.add(selectedSong);
-                        Toast.makeText(context, "Added to Play Next (Legacy)", Toast.LENGTH_SHORT).show();
+                    // Unified Play Next logic for all Activity contexts
+                    MusicViewModel vm = null;
+                    if (context instanceof MainActivity) {
+                        vm = ((MainActivity) context).musicViewModel;
+                    } else if (context instanceof LikedSongsActivity) {
+                        vm = ((LikedSongsActivity) context).musicViewModel;
+                    }
+                    
+                    if (vm != null) {
+                        vm.addToPlayNext(selectedSong);
                     }
                 } else if (title.equals("Add To Favourite") || title.equals("Removed From Favourite")) {
                     // Toggle favorite logic
@@ -183,6 +188,17 @@ public class musicList_Recycler_Adapter extends RecyclerView.Adapter<musicList_R
             viewToAnimate.startAnimation(slideIn);
             lastPosition = position;
         }
+    }
+
+    /**
+     * Updates the highlighted song in the list.
+     * Synchronized with ViewModel to ensure all RecyclerViews are in perfect coordination.
+     */
+    public void updateHighlightedSong(musicList_Structure song) {
+        this.playingItem = song;
+        // Sync static reference for other components
+        currentItem = song;
+        notifyDataSetChanged();
     }
 
     public void updateSelection(int ignored) {
