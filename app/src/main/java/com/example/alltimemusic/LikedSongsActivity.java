@@ -28,6 +28,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import java.util.ArrayList;
+import java.util.List;
 
 @UnstableApi
 public class LikedSongsActivity extends AppCompatActivity {
@@ -191,13 +192,25 @@ public class LikedSongsActivity extends AppCompatActivity {
     }
 
     private void loadLikedSongs() {
-        likedSongs = FavoritesDatabase.favoriteList;
-        if (likedSongs != null) {
-            musicList_Recycler_Adapter adapter = new musicList_Recycler_Adapter(this, likedSongs);
-            recyclerView.setLayoutManager(new LinearLayoutManager(this));
-            recyclerView.setAdapter(adapter);
-            updateRecyclerViewSelection();
-        }
+        AppDatabase.databaseExecutor.execute(() -> {
+            AppDatabase db = AppDatabase.getInstance(this);
+            List<SongEntity> favs = db.musicDao().getAllFavorites();
+            
+            ArrayList<musicList_Structure> converted = new ArrayList<>();
+            for (SongEntity entity : favs) {
+                musicList_Structure song = new musicList_Structure(entity.songTitle, entity.songPath, entity.artistName, entity.albumId);
+                song.isFavourite = true;
+                converted.add(song);
+            }
+            
+            runOnUiThread(() -> {
+                likedSongs = converted;
+                musicList_Recycler_Adapter adapter = new musicList_Recycler_Adapter(this, likedSongs);
+                recyclerView.setLayoutManager(new LinearLayoutManager(this));
+                recyclerView.setAdapter(adapter);
+                updateRecyclerViewSelection();
+            });
+        });
     }
 
     public void openPlayerLayout() {

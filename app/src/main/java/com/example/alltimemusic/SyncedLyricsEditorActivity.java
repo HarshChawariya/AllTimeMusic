@@ -409,18 +409,21 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
     }
 
     private void loadLyricsWithPriority() {
-        FavoritesDatabase db = new FavoritesDatabase(this);
-        String[] lyrics = db.getCachedLyrics(currentSong.songPath);
-        lyricLines.clear();
-        if (lyrics != null) {
-            if (lyrics[1] != null && !lyrics[1].isEmpty() && !lyrics[1].equalsIgnoreCase("null")) {
-                isEditingSynced = true;
-                parseLyricsToLines(lyrics[1]);
-            } else if (lyrics[0] != null && !lyrics[0].isEmpty() && !lyrics[0].equalsIgnoreCase("null")) {
-                isEditingSynced = false;
-                parseLyricsToLines(lyrics[0]);
-            }
-        }
+        AppDatabase.databaseExecutor.execute(() -> {
+            LyricEntity lyrics = AppDatabase.getInstance(this).musicDao().getLyrics(currentSong.songPath);
+            runOnUiThread(() -> {
+                lyricLines.clear();
+                if (lyrics != null) {
+                    if (lyrics.syncedLyrics != null && !lyrics.syncedLyrics.isEmpty() && !lyrics.syncedLyrics.equalsIgnoreCase("null")) {
+                        isEditingSynced = true;
+                        parseLyricsToLines(lyrics.syncedLyrics);
+                    } else if (lyrics.plainLyrics != null && !lyrics.plainLyrics.isEmpty() && !lyrics.plainLyrics.equalsIgnoreCase("null")) {
+                        isEditingSynced = false;
+                        parseLyricsToLines(lyrics.plainLyrics);
+                    }
+                }
+            });
+        });
     }
 
     private void parseLyricsToLines(String raw) {
@@ -459,15 +462,18 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
         popup.addMenuItem("Edit Synced Lyrics");
         
         popup.setOnItemClickListener(title -> {
-            FavoritesDatabase db = new FavoritesDatabase(this);
-            String[] lyrics = db.getCachedLyrics(currentSong.songPath);
-            if (title.equals("Edit Plain Lyrics")) {
-                isEditingSynced = false;
-                if (lyrics != null) parseLyricsToLines(lyrics[0]);
-            } else if (title.equals("Edit Synced Lyrics")) {
-                isEditingSynced = true;
-                if (lyrics != null) parseLyricsToLines(lyrics[1]);
-            }
+            AppDatabase.databaseExecutor.execute(() -> {
+                LyricEntity lyrics = AppDatabase.getInstance(this).musicDao().getLyrics(currentSong.songPath);
+                runOnUiThread(() -> {
+                    if (title.equals("Edit Plain Lyrics")) {
+                        isEditingSynced = false;
+                        if (lyrics != null) parseLyricsToLines(lyrics.plainLyrics);
+                    } else if (title.equals("Edit Synced Lyrics")) {
+                        isEditingSynced = true;
+                        if (lyrics != null) parseLyricsToLines(lyrics.syncedLyrics);
+                    }
+                });
+            });
         });
         popup.show(view);
     }
@@ -637,9 +643,13 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
             long ms = (time % 1000) / 10;
             syncedBuilder.append(String.format(Locale.US, "[%02d:%02d.%02d]", min, sec, ms)).append(line.getText()).append("\n");
         }
-        FavoritesDatabase db = new FavoritesDatabase(this);
-        db.saveLyrics(currentSong.songPath, null, syncedBuilder.toString());
-        if (showToast) Toast.makeText(this, "Lyrics Synced & Saved!", Toast.LENGTH_SHORT).show();
+        
+        AppDatabase.databaseExecutor.execute(() -> {
+            AppDatabase.getInstance(this).musicDao().insertLyrics(new LyricEntity(currentSong.songPath, null, syncedBuilder.toString()));
+            if (showToast) {
+                runOnUiThread(() -> Toast.makeText(this, "Lyrics Synced & Saved!", Toast.LENGTH_SHORT).show());
+            }
+        });
     }
 
     @Override

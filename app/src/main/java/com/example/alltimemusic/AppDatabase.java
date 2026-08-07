@@ -9,6 +9,8 @@ import androidx.room.Room;
 import androidx.room.RoomDatabase;
 
 import java.io.File;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 @Database(entities = {SongEntity.class, LyricEntity.class}, version = 1, exportSchema = false)
 public abstract class AppDatabase extends RoomDatabase {
@@ -17,16 +19,18 @@ public abstract class AppDatabase extends RoomDatabase {
 
     public abstract MusicDao musicDao();
 
+    // High-Performance Background Executor for all DB operations
+    public static final ExecutorService databaseExecutor = Executors.newFixedThreadPool(4);
+
     public static synchronized AppDatabase getInstance(Context context) {
         if (sInstance == null) {
             sInstance = Room.databaseBuilder(context.getApplicationContext(),
                             AppDatabase.class, DATABASE_NAME)
                     .fallbackToDestructiveMigration()
-                    .allowMainThreadQueries() 
                     .build();
             
             // Check and migrate old data once
-            migrateOldData(context, sInstance);
+            databaseExecutor.execute(() -> migrateOldData(context, sInstance));
         }
         return sInstance;
     }

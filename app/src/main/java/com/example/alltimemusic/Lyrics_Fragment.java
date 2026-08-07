@@ -140,24 +140,29 @@ public class Lyrics_Fragment extends Fragment {
         artist_name.setText(current.getCleanArtist());
         updateProfileImage(miniProfile, current);
         
-        FavoritesDatabase db = new FavoritesDatabase(getContext());
-        String[] cached = db.getCachedLyrics(current.songPath);
-        
-        if (cached != null) {
-            currentPlainLyrics = cached[0];
-            currentSyncedLyrics = cached[1];
-            if (isSyncedMode && !currentSyncedLyrics.isEmpty() && !currentSyncedLyrics.equalsIgnoreCase("null")) {
-                updateLyricsUI(currentSyncedLyrics);
-            } else {
-                updateLyricsUI(currentPlainLyrics);
-            }
-        } else {
-            if (MainActivity.isOfflineMode) {
-                updateLyricsUI("Offline Lyrics Not Found.\nSwitch to Online Mode to fetch.");
-            } else {
-                fetchLyricsOnline(current.songTitle, current.getCleanArtist(), current.songPath);
-            }
-        }
+        AppDatabase.databaseExecutor.execute(() -> {
+            AppDatabase db = AppDatabase.getInstance(getContext());
+            LyricEntity lyricEntity = db.musicDao().getLyrics(current.songPath);
+            
+            if (getActivity() == null) return;
+            getActivity().runOnUiThread(() -> {
+                if (lyricEntity != null) {
+                    currentPlainLyrics = lyricEntity.plainLyrics;
+                    currentSyncedLyrics = lyricEntity.syncedLyrics;
+                    if (isSyncedMode && currentSyncedLyrics != null && !currentSyncedLyrics.isEmpty() && !currentSyncedLyrics.equalsIgnoreCase("null")) {
+                        updateLyricsUI(currentSyncedLyrics);
+                    } else {
+                        updateLyricsUI(currentPlainLyrics);
+                    }
+                } else {
+                    if (MainActivity.isOfflineMode) {
+                        updateLyricsUI("Offline Lyrics Not Found.\nSwitch to Online Mode to fetch.");
+                    } else {
+                        fetchLyricsOnline(current.songTitle, current.getCleanArtist(), current.songPath);
+                    }
+                }
+            });
+        });
         miniSongTitle.setText(current.songTitle);
     }
 
@@ -239,24 +244,34 @@ public class Lyrics_Fragment extends Fragment {
             @Override
             public void onResponse(@NonNull Call call, @NonNull Response response) {
                 try (response) {
-                    if (response.isSuccessful()) {
-                        JSONArray jsonArray = new JSONArray(response.body().string());
-                        if (jsonArray.length() > 0) {
-                            JSONObject obj = jsonArray.getJSONObject(0);
-                            String plain = obj.optString("plainLyrics", "");
-                            String synced = obj.optString("syncedLyrics", "");
+                    if (response.isSuccessful() && response.body() != null) {
+                        try {
+                            String responseData = response.body().string();
+                            JSONArray jsonArray = new JSONArray(responseData);
+                            if (jsonArray.length() > 0) {
+                                JSONObject obj = jsonArray.getJSONObject(0);
+                                String plain = obj.optString("plainLyrics", "");
+                                String synced = obj.optString("syncedLyrics", "");
 
-                            FavoritesDatabase db = new FavoritesDatabase(getContext());
-                            db.saveLyrics(targetSongPath, plain, synced);
+                                AppDatabase.databaseExecutor.execute(() -> {
+                                    AppDatabase db = AppDatabase.getInstance(getContext());
+                                    db.musicDao().insertLyrics(new LyricEntity(targetSongPath, plain, synced));
 
-                            if (targetSongPath.equals(lastLoadedSongId)) {
-                                currentPlainLyrics = plain;
-                                currentSyncedLyrics = synced;
-                                updateLyricsUI(isSyncedMode && !synced.isEmpty() ? synced : plain);
+                                    if (getActivity() == null) return;
+                                    getActivity().runOnUiThread(() -> {
+                                        if (targetSongPath.equals(lastLoadedSongId)) {
+                                            currentPlainLyrics = plain;
+                                            currentSyncedLyrics = synced;
+                                            updateLyricsUI(isSyncedMode && !synced.isEmpty() ? synced : plain);
+                                        }
+                                    });
+                                });
+                            } else {
+                                if (targetSongPath.equals(lastLoadedSongId))
+                                    updateLyricsUI("Lyrics not found.");
                             }
-                        } else {
-                            if (targetSongPath.equals(lastLoadedSongId))
-                                updateLyricsUI("Lyrics not found.");
+                        } catch (Exception e) {
+                            e.printStackTrace();
                         }
                     }
                 } catch (Exception e) {
@@ -355,10 +370,16 @@ public class Lyrics_Fragment extends Fragment {
     public void deleteLyricsFromDB() {
         musicList_Structure current = musicList_Recycler_Adapter.currentItem;
         if (current != null) {
-            new FavoritesDatabase(getContext()).deleteLyrics(current.songPath);
-            lastLoadedSongId = "";
-            updateLyricsSync(current);
-            Toast.makeText(getContext(), "Lyrics Deleted", Toast.LENGTH_SHORT).show();
+            AppDatabase.databaseExecutor.execute(() -> {
+                AppDatabase.getInstance(getContext()).musicDao().deleteLyrics(current.songPath);
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> {
+                        lastLoadedSongId = "";
+                        updateLyricsSync(current);
+                        Toast.makeText(getContext(), "Lyrics Deleted", Toast.LENGTH_SHORT).show();
+                    });
+                }
+            });
         }
     }
 
@@ -380,10 +401,16 @@ public class Lyrics_Fragment extends Fragment {
             String text = input.getText().toString().trim();
             musicList_Structure current = musicList_Recycler_Adapter.currentItem;
             if (current != null && !text.isEmpty()) {
-                new FavoritesDatabase(getContext()).saveLyrics(current.songPath, text, "");
-                lastLoadedSongId = "";
-                updateLyricsSync(current);
-                dialog.dismiss();
+                AppDatabase.databaseExecutor.execute(() -> {
+                    AppDatabase.getInstance(getContext()).musicDao().insertLyrics(new LyricEntity(current.songPath, text, ""));
+                    if (getActivity() != null) {
+                        getActivity().runOnUiThread(() -> {
+                            lastLoadedSongId = "";
+                            updateLyricsSync(current);
+                            dialog.dismiss();
+                        });
+                    }
+                });
             }
         });
         dialog.show();
@@ -392,15 +419,20 @@ public class Lyrics_Fragment extends Fragment {
     public void openSyncedLyricsEditor() {
         musicList_Structure current = musicList_Recycler_Adapter.currentItem;
         if (current != null) {
-            String[] lyrics = new FavoritesDatabase(getContext()).getCachedLyrics(current.songPath);
-
-            if (lyrics == null || lyrics[0] == null || lyrics[0].isEmpty()) {
-                openAddLyricsDialog();
-            } else {
-                Intent intent = new Intent(getContext(), SyncedLyricsEditorActivity.class);
-                intent.putExtra("initial_color", MainActivity.lastDynamicColor);
-                startActivity(intent);
-            }
+            AppDatabase.databaseExecutor.execute(() -> {
+                LyricEntity lyrics = AppDatabase.getInstance(getContext()).musicDao().getLyrics(current.songPath);
+                
+                if (getActivity() == null) return;
+                getActivity().runOnUiThread(() -> {
+                    if (lyrics == null || lyrics.plainLyrics == null || lyrics.plainLyrics.isEmpty()) {
+                        openAddLyricsDialog();
+                    } else {
+                        Intent intent = new Intent(getContext(), SyncedLyricsEditorActivity.class);
+                        intent.putExtra("initial_color", MainActivity.lastDynamicColor);
+                        startActivity(intent);
+                    }
+                });
+            });
         }
     }
 }

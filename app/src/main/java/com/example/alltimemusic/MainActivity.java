@@ -57,6 +57,7 @@ import androidx.lifecycle.ViewModelProvider;
 import androidx.media3.common.util.UnstableApi;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 
 @UnstableApi
@@ -288,15 +289,20 @@ public class MainActivity extends AppCompatActivity {
         }
 
         if (musicList != null && !musicList.isEmpty()) {
-            try (FavoritesDatabase db = new FavoritesDatabase(this)) {
-                for (musicList_Structure song : musicList) {
-                    song.isFavourite = FavoritesDatabase.favoriteList.stream()
-                            .anyMatch(fav -> Objects.equals(fav.songPath, song.songPath));
-                }
-            }
-            if (recyclerView.getAdapter() != null) {
-                recyclerView.getAdapter().notifyDataSetChanged();
-            }
+            AppDatabase.databaseExecutor.execute(() -> {
+                AppDatabase db = AppDatabase.getInstance(this);
+                List<SongEntity> favs = db.musicDao().getAllFavorites();
+                
+                runOnUiThread(() -> {
+                    for (musicList_Structure song : musicList) {
+                        song.isFavourite = favs.stream()
+                                .anyMatch(fav -> Objects.equals(fav.songPath, song.songPath));
+                    }
+                    if (recyclerView.getAdapter() != null) {
+                        recyclerView.getAdapter().notifyDataSetChanged();
+                    }
+                });
+            });
         }
         
         if (isReturningFromLiked) {

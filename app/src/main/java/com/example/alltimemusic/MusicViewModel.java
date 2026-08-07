@@ -196,14 +196,16 @@ public class MusicViewModel extends ViewModel {
             }
 
             if (appContext != null) {
-                try (FavoritesDatabase db = new FavoritesDatabase(appContext)) {
-                    boolean isFav = db.isFavorite(song.songPath);
+                // Room Migration: Off-thread favorite check
+                AppDatabase.databaseExecutor.execute(() -> {
+                    AppDatabase db = AppDatabase.getInstance(appContext);
+                    boolean isFav = db.musicDao().isFavorite(song.songPath);
                     if (Looper.myLooper() == Looper.getMainLooper()) {
                         isCurrentSongFavourite.setValue(isFav);
                     } else {
                         isCurrentSongFavourite.postValue(isFav);
                     }
-                }
+                });
             }
         }
     }
@@ -414,17 +416,22 @@ public class MusicViewModel extends ViewModel {
     public void toggleFavourite() {
         musicList_Structure song = currentSong.getValue();
         if (song != null && appContext != null) {
-            try (FavoritesDatabase db = new FavoritesDatabase(appContext)) {
-                if (db.isFavorite(song.songPath)) {
-                    db.removeFavorite(song.songPath);
+            AppDatabase.databaseExecutor.execute(() -> {
+                AppDatabase db = AppDatabase.getInstance(appContext);
+                boolean isFav = db.musicDao().isFavorite(song.songPath);
+                
+                if (isFav) {
+                    db.musicDao().deleteFavorite(new SongEntity(song.songPath, song.songTitle, song.artistName, song.albumId));
                     isCurrentSongFavourite.postValue(false);
-                    Toast.makeText(appContext, "Removed from Favorite", Toast.LENGTH_SHORT).show();
+                    new Handler(Looper.getMainLooper()).post(() -> 
+                        Toast.makeText(appContext, "Removed from Favorite", Toast.LENGTH_SHORT).show());
                 } else {
-                    db.addFavorite(song);
+                    db.musicDao().insertFavorite(new SongEntity(song.songPath, song.songTitle, song.artistName, song.albumId));
                     isCurrentSongFavourite.postValue(true);
-                    Toast.makeText(appContext, "Added to Favorite", Toast.LENGTH_SHORT).show();
+                    new Handler(Looper.getMainLooper()).post(() -> 
+                        Toast.makeText(appContext, "Added to Favorite", Toast.LENGTH_SHORT).show());
                 }
-            }
+            });
         }
     }
 

@@ -7,6 +7,8 @@ import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -161,20 +163,27 @@ public class musicList_Recycler_Adapter extends RecyclerView.Adapter<musicList_R
                         vm.addToPlayNext(selectedSong);
                     }
                 } else if (title.equals("Add To Favourite") || title.equals("Removed From Favourite")) {
-                    // Toggle favorite logic
-                    FavoritesDatabase db = new FavoritesDatabase(context);
-                    if (item.isFavourite) {
-                        db.removeFavorite(item.songPath);
-                        item.isFavourite = false;
-                        Toast.makeText(context, "Removed From Favourite", Toast.LENGTH_SHORT).show();
-                    } else {
-                        db.addFavorite(item);
-                        item.isFavourite = true;
-                        Toast.makeText(context, "Added To Favourite", Toast.LENGTH_SHORT).show();
-                    }
-                    
-                    // Update visual heart indicator
-                    notifyItemChanged(holder.getBindingAdapterPosition());
+                    // Toggle favorite logic via Room (Off-thread)
+                    AppDatabase.databaseExecutor.execute(() -> {
+                        AppDatabase db = AppDatabase.getInstance(context);
+                        boolean isFav = db.musicDao().isFavorite(item.songPath);
+                        
+                        if (isFav) {
+                            db.musicDao().deleteFavorite(new SongEntity(item.songPath, item.songTitle, item.artistName, item.albumId));
+                            item.isFavourite = false;
+                            new Handler(Looper.getMainLooper()).post(() -> {
+                                Toast.makeText(context, "Removed From Favourite", Toast.LENGTH_SHORT).show();
+                                notifyItemChanged(holder.getBindingAdapterPosition());
+                            });
+                        } else {
+                            db.musicDao().insertFavorite(new SongEntity(item.songPath, item.songTitle, item.artistName, item.albumId));
+                            item.isFavourite = true;
+                            new Handler(Looper.getMainLooper()).post(() -> {
+                                Toast.makeText(context, "Added To Favourite", Toast.LENGTH_SHORT).show();
+                                notifyItemChanged(holder.getBindingAdapterPosition());
+                            });
+                        }
+                    });
                 }
             });
             popupMenu.show(view);
