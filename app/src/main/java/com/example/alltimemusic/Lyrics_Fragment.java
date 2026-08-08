@@ -398,12 +398,20 @@ public class Lyrics_Fragment extends Fragment {
                                 return;
                             }
                             JSONObject obj = new JSONObject(body);
+                            String plain = obj.optString("plainLyrics", "");
                             String synced = obj.optString("syncedLyrics", "");
-                            if (!synced.isEmpty() && !synced.equalsIgnoreCase("null")) {
-                                Log.d("LyricsFetch", "✅ [SUCCESS] Stage 1: Synced Lyrics Found!");
-                                processLrcResult(obj, targetSongPath);
+                            
+                            // NEW: Check Language
+                            if (isSupportedLanguage(plain + synced)) {
+                                if (!synced.isEmpty() && !synced.equalsIgnoreCase("null")) {
+                                    Log.d("LyricsFetch", "✅ [SUCCESS] Stage 1: Synced Lyrics Found!");
+                                    processLrcResult(obj, targetSongPath);
+                                } else {
+                                    Log.d("LyricsFetch", "⚠️ [PARTIAL] Stage 1 got result but NO Synced Lyrics. Trying Stage 2 Search...");
+                                    performBroadSearch(finalTitle, finalArtist, duration, targetSongPath);
+                                }
                             } else {
-                                Log.d("LyricsFetch", "⚠️ [PARTIAL] Stage 1 got result but NO Synced Lyrics. Trying Stage 2 Search...");
+                                Log.d("LyricsFetch", "🚫 [REJECTED] Stage 1 result is in an unsupported language. Moving to Stage 2...");
                                 performBroadSearch(finalTitle, finalArtist, duration, targetSongPath);
                             }
                         } else {
@@ -454,52 +462,72 @@ public class Lyrics_Fragment extends Fragment {
                         if (array.length() > 0) {
                             JSONObject bestMatch = null;
 
-                            // 1. High Priority: Duration Match +/- 2s AND Synced
+                            // 1. High Priority: Duration Match +/- 2s AND Synced AND Supported Language
                             for (int i = 0; i < array.length(); i++) {
                                 JSONObject item = array.getJSONObject(i);
                                 int itemDuration = item.optInt("duration", 0);
                                 String synced = item.optString("syncedLyrics", "");
+                                String plain = item.optString("plainLyrics", "");
                                 
-                                if (Math.abs(itemDuration - targetDuration) <= 2 && !synced.isEmpty() && !synced.equalsIgnoreCase("null")) {
-                                    Log.d("LyricsFetch", "🎯 [FOUND] Best Match: Precision Duration (+/- 2s) + Synced Lyrics");
+                                if (Math.abs(itemDuration - targetDuration) <= 2 && 
+                                    !synced.isEmpty() && !synced.equalsIgnoreCase("null") &&
+                                    isSupportedLanguage(plain + synced)) {
+                                    Log.d("LyricsFetch", "🎯 [FOUND] Best Match: Precision Duration (+/- 2s) + Synced Lyrics + Supported Language");
                                     bestMatch = item;
                                     break;
                                 }
                             }
 
-                            // 2. Medium Priority: Any result that has Synced Lyrics (Ignore Duration)
+                            // 2. Medium Priority: Any result that has Synced Lyrics AND Supported Language
                             if (bestMatch == null) {
                                 for (int i = 0; i < array.length(); i++) {
                                     JSONObject item = array.getJSONObject(i);
                                     String synced = item.optString("syncedLyrics", "");
-                                    if (!synced.isEmpty() && !synced.equalsIgnoreCase("null")) {
-                                        Log.d("LyricsFetch", "✅ [FOUND] Alternative Match: Found Synced Lyrics (Duration mismatch)");
+                                    String plain = item.optString("plainLyrics", "");
+                                    if (!synced.isEmpty() && !synced.equalsIgnoreCase("null") && 
+                                        isSupportedLanguage(plain + synced)) {
+                                        Log.d("LyricsFetch", "✅ [FOUND] Alternative Match: Synced Lyrics + Supported Language (Duration mismatch)");
                                         bestMatch = item;
                                         break;
                                     }
                                 }
                             }
 
-                            // 3. Low Priority: Just Duration Match +/- 2s (No synced available)
+                            // 3. Low Priority: Just Duration Match +/- 2s AND Supported Language
                             if (bestMatch == null) {
                                 for (int i = 0; i < array.length(); i++) {
                                     JSONObject item = array.getJSONObject(i);
                                     int itemDuration = item.optInt("duration", 0);
-                                    if (Math.abs(itemDuration - targetDuration) <= 2) {
-                                        Log.d("LyricsFetch", "📜 [FOUND] Fallback Match: Precision Duration but NO Synced available");
+                                    String plain = item.optString("plainLyrics", "");
+                                    String synced = item.optString("syncedLyrics", "");
+                                    if (Math.abs(itemDuration - targetDuration) <= 2 && isSupportedLanguage(plain + synced)) {
+                                        Log.d("LyricsFetch", "📜 [FOUND] Fallback Match: Precision Duration + Supported Language (No synced available)");
                                         bestMatch = item;
                                         break;
                                     }
                                 }
                             }
 
-                            // 4. Final Fallback: First available result
+                            // 4. Final Fallback: First available result with supported language
                             if (bestMatch == null) {
-                                Log.d("LyricsFetch", "📋 [FOUND] Last Resort: Taking first available result.");
-                                bestMatch = array.getJSONObject(0);
+                                for (int i = 0; i < array.length(); i++) {
+                                    JSONObject item = array.getJSONObject(i);
+                                    String plain = item.optString("plainLyrics", "");
+                                    String synced = item.optString("syncedLyrics", "");
+                                    if (isSupportedLanguage(plain + synced)) {
+                                        Log.d("LyricsFetch", "📋 [FOUND] Last Resort: First result with supported language.");
+                                        bestMatch = item;
+                                        break;
+                                    }
+                                }
                             }
                             
-                            processLrcResult(bestMatch, targetPath);
+                            if (bestMatch != null) {
+                                processLrcResult(bestMatch, targetPath);
+                            } else {
+                                Log.d("LyricsFetch", "🚫 [REJECTED] All Stage 2 results are in unsupported languages.");
+                                fetchByTitleOnlyFallback(title, targetPath);
+                            }
                         } else {
                             Log.d("LyricsFetch", "⚠️ [NO-RESULTS] Stage 2 returned empty.");
                             // Use Stage 3 Fallback
@@ -544,13 +572,31 @@ public class Lyrics_Fragment extends Fragment {
                             JSONObject bestMatch = null;
                             for (int i = 0; i < array.length(); i++) {
                                 JSONObject item = array.getJSONObject(i);
-                                if (!item.optString("syncedLyrics", "").isEmpty()) {
+                                String plain = item.optString("plainLyrics", "");
+                                String synced = item.optString("syncedLyrics", "");
+                                
+                                if (!synced.isEmpty() && isSupportedLanguage(plain + synced)) {
                                     bestMatch = item;
                                     break;
                                 }
                             }
-                            if (bestMatch == null) bestMatch = array.getJSONObject(0);
-                            processLrcResult(bestMatch, targetPath);
+                            
+                            // If no synced, find first supported plain
+                            if (bestMatch == null) {
+                                for (int i = 0; i < array.length(); i++) {
+                                    JSONObject item = array.getJSONObject(i);
+                                    if (isSupportedLanguage(item.optString("plainLyrics", "") + item.optString("syncedLyrics", ""))) {
+                                        bestMatch = item;
+                                        break;
+                                    }
+                                }
+                            }
+
+                            if (bestMatch != null) {
+                                processLrcResult(bestMatch, targetPath);
+                            } else {
+                                if (targetPath.equals(lastLoadedSongId)) updateLyricsUI(getString(R.string.lyrics_unsupported_ui));
+                            }
                         } else {
                             if (targetPath.equals(lastLoadedSongId))
                                 updateLyricsUI(getString(R.string.lyrics_not_found_ui));
@@ -597,6 +643,38 @@ public class Lyrics_Fragment extends Fragment {
                 }
             });
         }
+    }
+
+    /**
+     * Language Filter: Allows only Hindi (Devanagari), English, and Hinglish.
+     * Uses script detection to identify allowed characters.
+     */
+    private boolean isSupportedLanguage(String text) {
+        if (text == null || text.trim().isEmpty()) return false;
+        
+        // Remove symbols, digits, punctuation, and common lyrics junk
+        String clean = text.replaceAll("[\\s\\d\\p{P}\\p{S}♪\\[\\]\\.:]", "");
+        
+        if (clean.isEmpty()) return true; // Just music notes or numbers is okay
+        
+        int supported = 0;
+        for (int i = 0; i < clean.length(); i++) {
+            char c = clean.charAt(i);
+            // English/Hinglish range (Basic Latin)
+            if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) {
+                supported++;
+            }
+            // Hindi range (Devanagari)
+            else if (c >= '\u0900' && c <= '\u097F') {
+                supported++;
+            }
+        }
+        
+        float ratio = (float) supported / clean.length();
+        // Threshold: 85% of actual characters must be in supported scripts
+        boolean isValid = ratio > 0.85;
+        if (!isValid) Log.d("LyricsFetch", "🚫 [REJECTED] Supported character ratio too low: " + ratio);
+        return isValid;
     }
 
     private void updateLyricsUI(String text) {
@@ -820,6 +898,12 @@ public class Lyrics_Fragment extends Fragment {
             String text = input.getText().toString().trim();
             if (text.isEmpty()) {
                 showToast(getString(R.string.please_enter_some_lyrics));
+                return;
+            }
+
+            // Language check for manual entry
+            if (!isSupportedLanguage(text)) {
+                showToast(getString(R.string.error_unsupported_language));
                 return;
             }
 

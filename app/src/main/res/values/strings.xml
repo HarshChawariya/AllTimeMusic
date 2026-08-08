@@ -60,4 +60,6 @@
     <string name="redo_successful">Redo Successful</string>
     <string name="nothing_to_redo">Nothing to Redo</string>
     <string name="lyrics_synced_saved">Lyrics Synced &amp; Saved!</string>
+    <string name="error_unsupported_language">Only Hindi, English or Hinglish lyrics are allowed.</string>
+    <string name="lyrics_unsupported_ui">Lyrics rejected: Unsupported language detected.</string>
 </resources>
