@@ -19,6 +19,8 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import java.util.ArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class LikedSongsActivity extends AppCompatActivity {
 
@@ -127,15 +129,23 @@ public class LikedSongsActivity extends AppCompatActivity {
     private void updateMiniProfileImage(musicList_Structure song) {
         if (miniProfile == null || song == null) return;
 
+        // RESET: Clear current image and reset state to fix recycling/flickering
+        Glide.with(this).clear(miniProfile);
+        miniProfile.setImageResource(R.drawable.profile);
+        setDefaultMiniProfile();
+
         android.net.Uri sArtworkUri = android.net.Uri.parse("content://media/external/audio/albumart");
         android.net.Uri uri = android.content.ContentUris.withAppendedId(sArtworkUri, song.albumId);
 
-        // Use Glide for efficient loading in mini player
+        // Use Glide with enhanced caching and no-animation for smoothness
         Glide.with(this)
                 .load(uri)
                 .placeholder(R.drawable.profile)
                 .error(R.drawable.profile)
+                .fallback(R.drawable.profile)
                 .transform(new CenterCrop())
+                .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.ALL)
+                .dontAnimate()
                 .into(new com.bumptech.glide.request.target.CustomTarget<android.graphics.drawable.Drawable>() {
                     @Override
                     public void onResourceReady(@NonNull android.graphics.drawable.Drawable resource, @androidx.annotation.Nullable com.bumptech.glide.request.transition.Transition<? super android.graphics.drawable.Drawable> transition) {
@@ -155,7 +165,6 @@ public class LikedSongsActivity extends AppCompatActivity {
 
                     @Override
                     public void onLoadFailed(@androidx.annotation.Nullable android.graphics.drawable.Drawable errorDrawable) {
-                        miniProfile.setImageDrawable(errorDrawable);
                         setDefaultMiniProfile();
                     }
                 });
@@ -191,16 +200,27 @@ public class LikedSongsActivity extends AppCompatActivity {
     }
 
     private void loadLikedSongs() {
-        likedSongs = FavoritesDatabase.favoriteList;
-        if (likedSongs != null) {
-            if (adapter == null) {
-                adapter = new musicList_Recycler_Adapter(this, likedSongs);
-                recyclerView.setLayoutManager(new LinearLayoutManager(this));
-                recyclerView.setAdapter(adapter);
-            } else {
-                adapter.setMusicList(likedSongs);
-            }
-            updateRecyclerViewSelection();
+        // Run on background thread using try-with-resources to automatically shutdown executor
+        // Note: ExecutorService implements AutoCloseable in modern Java/Android
+        try (ExecutorService executor = Executors.newSingleThreadExecutor()) {
+            executor.execute(() -> {
+                ArrayList<musicList_Structure> tempList = new ArrayList<>(FavoritesDatabase.favoriteList);
+
+                // Update UI on main thread
+                runOnUiThread(() -> {
+                    likedSongs = tempList;
+                    if (adapter == null) {
+                        adapter = new musicList_Recycler_Adapter(this, likedSongs);
+                        recyclerView.setLayoutManager(new LinearLayoutManager(this));
+                        recyclerView.setAdapter(adapter);
+                    } else {
+                        adapter.setMusicList(likedSongs);
+                    }
+                    updateRecyclerViewSelection();
+                });
+            });
+        } catch (Exception e) {
+            android.util.Log.e("LikedSongsActivity", "Error loading liked songs", e);
         }
     }
 

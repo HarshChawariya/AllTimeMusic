@@ -65,9 +65,8 @@ public class musicList_Recycler_Adapter extends RecyclerView.Adapter<musicList_R
         setAnimation(holder.itemView, position);
 
         // Selection Highlight
-        boolean isCurrentPlaying = false;
-        if (currentItem != null && item.songPath.equals(currentItem.songPath)) {
-            isCurrentPlaying = true;
+        boolean isCurrentPlaying = currentItem != null && item.songPath.equals(currentItem.songPath);
+        if (isCurrentPlaying) {
             selectedPosition = position; 
         }
 
@@ -252,6 +251,11 @@ public class musicList_Recycler_Adapter extends RecyclerView.Adapter<musicList_R
     private void updateListProfileImage(ImageView imageView, musicList_Structure item) {
         if (imageView == null || item == null) return;
 
+        // CRITICAL: Clear current image and reset params BEFORE starting load to fix recycling bugs
+        Glide.with(context).clear(imageView);
+        imageView.setImageResource(R.drawable.profile);
+        setDefaultListProfileImage(imageView); // Reset size to default first
+
         android.net.Uri sArtworkUri = android.net.Uri.parse("content://media/external/audio/albumart");
         android.net.Uri uri = android.content.ContentUris.withAppendedId(sArtworkUri, item.albumId);
 
@@ -259,7 +263,10 @@ public class musicList_Recycler_Adapter extends RecyclerView.Adapter<musicList_R
                 .load(uri)
                 .placeholder(R.drawable.profile)
                 .error(R.drawable.profile)
+                .fallback(R.drawable.profile)
                 .transform(new CenterCrop())
+                .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.ALL)
+                .dontAnimate() // Fix flickering
                 .into(new com.bumptech.glide.request.target.CustomTarget<android.graphics.drawable.Drawable>() {
                     @Override
                     public void onResourceReady(@NonNull android.graphics.drawable.Drawable resource, @androidx.annotation.Nullable com.bumptech.glide.request.transition.Transition<? super android.graphics.drawable.Drawable> transition) {
@@ -273,11 +280,11 @@ public class musicList_Recycler_Adapter extends RecyclerView.Adapter<musicList_R
                     @Override
                     public void onLoadCleared(@androidx.annotation.Nullable android.graphics.drawable.Drawable placeholder) {
                         imageView.setImageDrawable(placeholder);
+                        setDefaultListProfileImage(imageView);
                     }
 
                     @Override
                     public void onLoadFailed(@androidx.annotation.Nullable android.graphics.drawable.Drawable errorDrawable) {
-                        imageView.setImageDrawable(errorDrawable);
                         setDefaultListProfileImage(imageView);
                     }
                 });

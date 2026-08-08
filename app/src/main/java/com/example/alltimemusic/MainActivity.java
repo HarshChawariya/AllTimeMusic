@@ -48,6 +48,8 @@ import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions;
 
 import java.util.ArrayList;
 import java.util.Objects;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class MainActivity extends AppCompatActivity {
     RecyclerView recyclerView;
@@ -63,13 +65,14 @@ public class MainActivity extends AppCompatActivity {
     private TextView tabItem1, tabItem2;
     private View indicator;
     private ViewPager2 viewPager;
-    private ImageView miniPause, imgThreeDot;
+    private ImageView miniPause;
     private com.google.android.material.imageview.ShapeableImageView miniProfile;
     private ProgressBar miniProgressBar;
     LinearLayout mainLayout, musicList_LinLayOut, miniPlayer, TabLayout_LinearLayout;
     TextView miniPlayerText;
 
     private final Handler miniPlayerHandler = new Handler(Looper.getMainLooper());
+    private final ExecutorService executorService = Executors.newSingleThreadExecutor();
     private final Runnable miniPlayerRunnable = new Runnable() {
         @Override
         public void run() {
@@ -102,7 +105,7 @@ public class MainActivity extends AppCompatActivity {
         musicList_LinLayOut = findViewById(R.id.fragment_contained_linLayout);
         TabLayout_LinearLayout = findViewById(R.id.tabLay_LinearLayout);
         ImageView imgBackArrow = findViewById(R.id.img_back_arrow);
-        imgThreeDot = findViewById(R.id.img_three_dot);
+        ImageView imgThreeDot = findViewById(R.id.img_three_dot);
         miniPlayer = findViewById(R.id.miniPlayer);
         miniPlayerText = findViewById(R.id.dialog_txt);
         miniPause = findViewById(R.id.dialog_pause);
@@ -153,35 +156,43 @@ public class MainActivity extends AppCompatActivity {
             popup.addMenuItem(modeOption);
 
             popup.setOnItemClickListener(title -> {
-                if (title.equals("Plain Lyrics") || title.equals("Synced Lyrics")) {
-                    boolean isSynced = title.equals("Synced Lyrics");
-                    for (Fragment fragment : getSupportFragmentManager().getFragments()) {
-                        if (fragment instanceof Lyrics_Fragment) {
-                            ((Lyrics_Fragment) fragment).toggleLyricsMode(isSynced);
+                switch (title) {
+                    case "Plain Lyrics":
+                    case "Synced Lyrics":
+                        boolean isSynced = title.equals("Synced Lyrics");
+                        for (Fragment fragment : getSupportFragmentManager().getFragments()) {
+                            if (fragment instanceof Lyrics_Fragment) {
+                                ((Lyrics_Fragment) fragment).toggleLyricsMode(isSynced);
+                            }
                         }
-                    }
-                } else if (title.equals("Add Lyrics")) {
-                    for (Fragment fragment : getSupportFragmentManager().getFragments()) {
-                        if (fragment instanceof Lyrics_Fragment) {
-                            ((Lyrics_Fragment) fragment).openAddLyricsDialog();
+                        break;
+                    case "Add Lyrics":
+                        for (Fragment fragment : getSupportFragmentManager().getFragments()) {
+                            if (fragment instanceof Lyrics_Fragment) {
+                                ((Lyrics_Fragment) fragment).openAddLyricsDialog();
+                            }
                         }
-                    }
-                } else if (title.equals("Delete Lyrics")) {
-                    for (Fragment fragment : getSupportFragmentManager().getFragments()) {
-                        if (fragment instanceof Lyrics_Fragment) {
-                            ((Lyrics_Fragment) fragment).deleteLyricsFromDB();
+                        break;
+                    case "Delete Lyrics":
+                        for (Fragment fragment : getSupportFragmentManager().getFragments()) {
+                            if (fragment instanceof Lyrics_Fragment) {
+                                ((Lyrics_Fragment) fragment).deleteLyricsFromDB();
+                            }
                         }
-                    }
-                } else if (title.equals("Synced Lyrics Editor")) {
-                    for (Fragment fragment : getSupportFragmentManager().getFragments()) {
-                        if (fragment instanceof Lyrics_Fragment) {
-                            ((Lyrics_Fragment) fragment).openSyncedLyricsEditor();
+                        break;
+                    case "Synced Lyrics Editor":
+                        for (Fragment fragment : getSupportFragmentManager().getFragments()) {
+                            if (fragment instanceof Lyrics_Fragment) {
+                                ((Lyrics_Fragment) fragment).openSyncedLyricsEditor();
+                            }
                         }
-                    }
-                } else if (title.equals("Offline Mode") || title.equals("Online Mode")) {
-                    // Manual click: Just show the current state toast as requested
-                    String message = isOfflineMode ? "You're Offline" : "You're Online";
-                    Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+                        break;
+                    case "Offline Mode":
+                    case "Online Mode":
+                        // Manual click: Just show the current state toast as requested
+                        String message = isOfflineMode ? "You're Offline" : "You're Online";
+                        Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+                        break;
                 }
             });
             popup.show(v);
@@ -239,12 +250,10 @@ public class MainActivity extends AppCompatActivity {
         }
 
         if (musicList != null && !musicList.isEmpty()) {
-            try (FavoritesDatabase db = new FavoritesDatabase(this)) {
                 for (musicList_Structure song : musicList) {
                     song.isFavourite = FavoritesDatabase.favoriteList.stream()
                             .anyMatch(fav -> Objects.equals(fav.songPath, song.songPath));
                 }
-            }
             if (recyclerView.getAdapter() instanceof musicList_Recycler_Adapter) {
                 ((musicList_Recycler_Adapter) recyclerView.getAdapter()).setMusicList(musicList);
             }
@@ -278,9 +287,7 @@ public class MainActivity extends AppCompatActivity {
         android.animation.ValueAnimator colorAnimation = android.animation.ValueAnimator.ofObject(
                 new android.animation.ArgbEvaluator(), fromColor, toColor);
         colorAnimation.setDuration(300); // 300ms duration as requested
-        colorAnimation.addUpdateListener(animator -> {
-            getWindow().setStatusBarColor((int) animator.getAnimatedValue());
-        });
+        colorAnimation.addUpdateListener(animator -> getWindow().setStatusBarColor((int) animator.getAnimatedValue()));
         colorAnimation.start();
     }
 
@@ -365,32 +372,12 @@ public class MainActivity extends AppCompatActivity {
                                     .setRegion(width/4, height/4, (3*width)/4, (3*height)/4)
                                     .generate(palette -> {
                                         if (palette != null) {
-                                            int defaultValue = 0xFF9D201A;
-                                            
-                                            // Priority selection for the most atmospheric color
-                                            androidx.palette.graphics.Palette.Swatch bestSwatch = palette.getVibrantSwatch();
-                                            if (bestSwatch == null) bestSwatch = palette.getDominantSwatch();
-                                            if (bestSwatch == null) bestSwatch = palette.getDarkVibrantSwatch();
-
-                                            int targetColor = (bestSwatch != null) ? bestSwatch.getRgb() : defaultValue;
-
-                                            // HSV Post-processing: Boosting vibrance like Spotify "Mood" backgrounds
-                                            float[] hsv = new float[3];
-                                            Color.colorToHSV(targetColor, hsv);
-                                            
-                                            // Increase saturation for a more vivid look (1.3x boost)
-                                            hsv[1] = Math.min(hsv[1] * 1.3f, 0.85f); 
-                                            // Adjust brightness range for a deeper but more "glowy" effect
-                                            hsv[2] = Math.max(Math.min(hsv[2], 0.45f), 0.18f);
-
-                                            int finalColor = Color.HSVToColor(hsv);
+                                            int finalColor = extractBestColor(palette);
                                             applyDynamicColorsToUI(finalColor);
                                         }
                                     });
                             }
                         }
-/*hsv[1] = Math.min(hsv[1] * 1.1f, 0.75f);
-hsv[2] = Math.max(Math.min(hsv[2], 0.35f), 0.15f);*/
                         ViewGroup.LayoutParams params = miniProfile.getLayoutParams();
                         params.width = ViewGroup.LayoutParams.MATCH_PARENT;
                         params.height = ViewGroup.LayoutParams.MATCH_PARENT;
@@ -411,6 +398,34 @@ hsv[2] = Math.max(Math.min(hsv[2], 0.35f), 0.15f);*/
                         applyDynamicColorsToUI(Color.parseColor("#9D201A"));
                     }
                 });
+    }
+
+    /**
+     * Extracts the best atmosphere color from the album art palette.
+     * Uses HSV post-processing to boost vibrance and adjust brightness.
+     */
+    private int extractBestColor(Palette palette) {
+        int defaultValue = 0xFF9D201A;
+
+        // Priority selection for the most atmospheric color
+        Palette.Swatch bestSwatch = palette.getVibrantSwatch();
+        if (bestSwatch == null) bestSwatch = palette.getDominantSwatch();
+        if (bestSwatch == null) bestSwatch = palette.getDarkVibrantSwatch();
+
+        int targetColor = (bestSwatch != null) ? bestSwatch.getRgb() : defaultValue;
+
+        // HSV Post-processing: Boosting vibrance like Spotify "Mood" backgrounds
+        float[] hsv = new float[3];
+        Color.colorToHSV(targetColor, hsv);
+
+        // Increase saturation for a more vivid look (1.3x boost)
+        hsv[1] = Math.min(hsv[1] * 1.3f, 0.85f);
+        // Adjust brightness range for a deeper but more "glowy" effect
+        hsv[2] = Math.max(Math.min(hsv[2], 0.45f), 0.18f);
+
+        /*hsv[1] = Math.min(hsv[1] * 1.1f, 0.75f);
+          hsv[2] = Math.max(Math.min(hsv[2], 0.35f), 0.15f);*/
+        return Color.HSVToColor(hsv);
     }
 
     /**
@@ -454,6 +469,7 @@ hsv[2] = Math.max(Math.min(hsv[2], 0.35f), 0.15f);*/
     protected void onDestroy() {
         super.onDestroy();
         miniPlayerHandler.removeCallbacks(miniPlayerRunnable);
+        executorService.shutdown();
         if (connectivityManager != null && networkCallback != null) {
             connectivityManager.unregisterNetworkCallback(networkCallback);
         }
@@ -584,21 +600,22 @@ hsv[2] = Math.max(Math.min(hsv[2], 0.35f), 0.15f);*/
     }
 
     public void displaySongs() {
-        musicList.clear();
-        ContentResolver contentResolver = getContentResolver();
-        Uri songUri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
-        String selection = MediaStore.Audio.Media.IS_MUSIC + "!= 0";
-        String sortOrder = MediaStore.Audio.Media.TITLE + " ASC";
+        // Run database and content resolver queries on a background thread to prevent scrolling lag
+        executorService.execute(() -> {
+            ArrayList<musicList_Structure> tempList = new ArrayList<>();
+            ContentResolver contentResolver = getContentResolver();
+            Uri songUri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
+            String selection = MediaStore.Audio.Media.IS_MUSIC + "!= 0";
+            String sortOrder = MediaStore.Audio.Media.TITLE + " ASC";
 
-        try (Cursor cursor = contentResolver.query(songUri, null, selection, null, sortOrder)) {
-            if (cursor != null && cursor.moveToFirst()) {
-                int titleCol = cursor.getColumnIndex(MediaStore.Audio.Media.TITLE);
-                int dataCol = cursor.getColumnIndex(MediaStore.Audio.Media.DATA);
-                int artistCol = cursor.getColumnIndex(MediaStore.Audio.Media.ARTIST);
-                int albumIdCol = cursor.getColumnIndex(MediaStore.Audio.Media.ALBUM_ID);
-                int displayCol = cursor.getColumnIndex(MediaStore.Audio.Media.DISPLAY_NAME);
+            try (Cursor cursor = contentResolver.query(songUri, null, selection, null, sortOrder)) {
+                if (cursor != null && cursor.moveToFirst()) {
+                    int titleCol = cursor.getColumnIndex(MediaStore.Audio.Media.TITLE);
+                    int dataCol = cursor.getColumnIndex(MediaStore.Audio.Media.DATA);
+                    int artistCol = cursor.getColumnIndex(MediaStore.Audio.Media.ARTIST);
+                    int albumIdCol = cursor.getColumnIndex(MediaStore.Audio.Media.ALBUM_ID);
+                    int displayCol = cursor.getColumnIndex(MediaStore.Audio.Media.DISPLAY_NAME);
 
-                try (FavoritesDatabase db = new FavoritesDatabase(this)) {
                     do {
                         String title = cursor.getString(titleCol);
                         String path = cursor.getString(dataCol);
@@ -608,31 +625,36 @@ hsv[2] = Math.max(Math.min(hsv[2], 0.35f), 0.15f);*/
 
                         if (displayName != null && !displayName.isEmpty()) {
                             String name = displayName.toLowerCase();
+                            // Filter valid music files
                             if (name.endsWith(".mp3") && !name.startsWith(".") && !Character.isDigit(name.charAt(0)) && Character.isAlphabetic(name.charAt(0))) {
                                 musicList_Structure song = new musicList_Structure(title, path, artist, albumId);
                                 song.isFavourite = FavoritesDatabase.favoriteList.stream().anyMatch(f -> Objects.equals(f.songPath, path));
-                                musicList.add(song);
+                                tempList.add(song);
                             }
                         }
                     } while (cursor.moveToNext());
                 }
             }
-        }
 
-        musicList.sort((o1, o2) -> o1.songTitle.compareToIgnoreCase(o2.songTitle));
-        
-        // Use DiffUtil by reusing the adapter
-        if (recyclerView.getAdapter() instanceof musicList_Recycler_Adapter) {
-            ((musicList_Recycler_Adapter) recyclerView.getAdapter()).setMusicList(musicList);
-        } else {
-            recyclerView.setAdapter(new musicList_Recycler_Adapter(this, musicList));
-        }
+            tempList.sort((o1, o2) -> o1.songTitle.compareToIgnoreCase(o2.songTitle));
 
-        if (!musicList.isEmpty()) {
-            alphabet.setText(String.valueOf(musicList.get(0).songTitle.charAt(0)).toUpperCase());
-        } else {
-            alphabet.setVisibility(GONE);
-        }
+            // Update UI on main thread
+            runOnUiThread(() -> {
+                musicList = tempList;
+                if (recyclerView.getAdapter() instanceof musicList_Recycler_Adapter) {
+                    ((musicList_Recycler_Adapter) recyclerView.getAdapter()).setMusicList(musicList);
+                } else {
+                    recyclerView.setAdapter(new musicList_Recycler_Adapter(this, musicList));
+                }
+
+                if (!musicList.isEmpty()) {
+                    alphabet.setVisibility(VISIBLE);
+                    alphabet.setText(String.valueOf(musicList.get(0).songTitle.charAt(0)).toUpperCase());
+                } else {
+                    alphabet.setVisibility(GONE);
+                }
+            });
+        });
     }
 
     public void displayTabLayOut(){
