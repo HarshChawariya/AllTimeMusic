@@ -1,5 +1,6 @@
 package com.example.alltimemusic;
 
+import android.annotation.SuppressLint;
 import android.os.Bundle;
 
 import androidx.annotation.NonNull;
@@ -75,7 +76,7 @@ public class Lyrics_Fragment extends Fragment {
                         lyricsHandler.postDelayed(this, 200); // More frequent updates for smooth sync
                     }
                 } catch (Exception e) {
-                    e.printStackTrace();
+                    Log.e("Lyrics_Fragment", "Error in lyricsRunnable", e);
                 }
             }
         }
@@ -217,27 +218,28 @@ public class Lyrics_Fragment extends Fragment {
             }
             
             // FEATURE: Check Offline Database Cache
-            FavoritesDatabase db = new FavoritesDatabase(getContext());
-            String[] cached = db.getCachedLyrics(current.songPath);
-            
-            if (cached != null) {
-                // Use cached lyrics if available
-                currentPlainLyrics = cached[0];
-                currentSyncedLyrics = cached[1];
+            try (FavoritesDatabase db = new FavoritesDatabase(getContext())) {
+                String[] cached = db.getCachedLyrics(current.songPath);
                 
-                if (isSyncedMode && !currentSyncedLyrics.isEmpty() && !currentSyncedLyrics.equalsIgnoreCase("null")) {
-                    updateLyricsUI(currentSyncedLyrics);
+                if (cached != null) {
+                    // Use cached lyrics if available
+                    currentPlainLyrics = cached[0];
+                    currentSyncedLyrics = cached[1];
+                    
+                    if (isSyncedMode && !currentSyncedLyrics.isEmpty() && !currentSyncedLyrics.equalsIgnoreCase("null")) {
+                        updateLyricsUI(currentSyncedLyrics);
+                    } else {
+                        updateLyricsUI(currentPlainLyrics);
+                    }
                 } else {
-                    updateLyricsUI(currentPlainLyrics);
-                }
-            } else {
-                // Check if in Offline Mode
-                if (MainActivity.isOfflineMode) {
-                    updateLyricsUI("Offline Lyrics Not Found.\nSwitch to Online Mode to fetch.");
-                    showToast("Offline Lyrics Not Found");
-                } else {
-                    // Fetch lyrics online with a specific ID check
-                    fetchLyricsOnline(current.songTitle, displayArtist, durationSeconds, current.songPath);
+                    // Check if in Offline Mode
+                    if (MainActivity.isOfflineMode) {
+                        updateLyricsUI(getString(R.string.offline_lyrics_not_found_instructions));
+                        showToast(getString(R.string.offline_lyrics_not_found));
+                    } else {
+                        // Fetch lyrics online with a specific ID check
+                        fetchLyricsOnline(current.songTitle, displayArtist, durationSeconds, current.songPath);
+                    }
                 }
             }
             
@@ -333,30 +335,25 @@ public class Lyrics_Fragment extends Fragment {
             getActivity().runOnUiThread(() -> {
                 if (lyricsRecycler != null) lyricsRecycler.setVisibility(View.GONE);
                 if (plainLyricsScroll != null) plainLyricsScroll.setVisibility(View.VISIBLE);
-                lyricsTxt.setText(R.string.lyrics_will_be_appearing);
+                lyricsTxt.setText(R.string.searching_for_lyrics);
             });
         }
         
-        // Use cleanString for API search processing
+        // Step 1: Accurate cleaning for search
         String cleanTitle = cleanString(title);
         String cleanArtist = cleanString(artist);
-        
-        // Smart Split: If artist is empty/unknown/generic, try to get it from title
-        if (cleanArtist.isEmpty() || cleanArtist.equalsIgnoreCase("unknown") || cleanArtist.contains("Unknown Artist")) {
+        Log.d("LyricsFetch", "🚀 [START] Fetching lyrics for: " + cleanTitle + " | Artist: " + cleanArtist + " | Duration: " + duration + "s");
+
+        // Smart Split: If artist is empty/generic, try extracting from title
+        if (cleanArtist.isEmpty() || cleanArtist.equalsIgnoreCase("unknown")) {
             String[] delims = {" _ ", " | ", " — ", " - ", " : ", " ~ "};
             for (String d : delims) {
                 if (cleanTitle.contains(d)) {
                     String[] parts = cleanTitle.split(java.util.regex.Pattern.quote(d));
                     if (parts.length >= 2) {
-                        // Take the last part as Artist and remaining as Title
                         cleanArtist = cleanString(parts[parts.length - 1]);
-                        
-                        StringBuilder titleBuilder = new StringBuilder();
-                        for (int i = 0; i < parts.length - 1; i++) {
-                            titleBuilder.append(parts[i]);
-                            if (i < parts.length - 2) titleBuilder.append(d);
-                        }
-                        cleanTitle = cleanString(titleBuilder.toString());
+                        cleanTitle = cleanString(parts[0]);
+                        Log.d("LyricsFetch", "💡 [SMART-SPLIT] Separated artist from title: " + cleanTitle + " | " + cleanArtist);
                         break;
                     }
                 }
@@ -366,178 +363,240 @@ public class Lyrics_Fragment extends Fragment {
         final String finalArtist = cleanArtist;
         final String finalTitle = cleanTitle;
 
-        // API search logic
-        HttpUrl baseUrl = HttpUrl.parse("https://lrclib.net/api/search");
-        if (baseUrl == null) {
-            updateLyricsUI("Error: Invalid API URL");
-            return;
-        }
-        
-        HttpUrl.Builder urlBuilder = baseUrl.newBuilder();
-        
-        // Super-clean titles only for the API request
-        String apiTitle = finalTitle.replace("_", " ").replace("|", " ").replace("-", " ");
-        String apiArtist = finalArtist.replace("_", " ").replace("|", " ").replace("-", " ");
-        
-        urlBuilder.addQueryParameter("track_name", apiTitle);
-        if (!apiArtist.isEmpty()) {
-            urlBuilder.addQueryParameter("artist_name", apiArtist);
-        }
-        
-        // Add duration to improve matching accuracy
-        if (duration > 0) {
-            urlBuilder.addQueryParameter("duration", String.valueOf(duration));
-        }
+        // MULTI-STAGE FETCHING LOGIC
+        // Priority 1: Exact matching with Duration (Only if Artist exists)
+        if (!finalArtist.isEmpty() && !finalArtist.equalsIgnoreCase("unknown")) {
+            Log.d("LyricsFetch", "🔍 [STAGE 1] Attempting Exact Match (api/get)...");
+            HttpUrl getUrl = Objects.requireNonNull(HttpUrl.parse("https://lrclib.net/api/get"))
+                    .newBuilder()
+                    .addQueryParameter("artist_name", finalArtist)
+                    .addQueryParameter("track_name", finalTitle)
+                    .addQueryParameter("duration", String.valueOf(duration))
+                    .build();
 
-        urlBuilder.addQueryParameter("q", (apiArtist + " " + apiTitle).trim());
-        
-        HttpUrl url = urlBuilder.build();
+            Request getRequest = new Request.Builder()
+                    .url(getUrl)
+                    .header("User-Agent", "AllTimeMusic/1.7")
+                    .build();
 
+            client.newCall(getRequest).enqueue(new Callback() {
+                @Override
+                public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                    Log.d("LyricsFetch", "⚠️ [FAILED] Stage 1 (Network/Timeout). Moving to Stage 2...");
+                    performBroadSearch(finalTitle, finalArtist, duration, targetSongPath);
+                }
+
+                @Override
+                public void onResponse(@NonNull Call call, @NonNull Response response) {
+                    try (Response resp = response) {
+                        if (resp.isSuccessful()) {
+                            // IDE Fix: response.body() is guaranteed not null in OkHttp 4/5 for successful responses
+                            String body = resp.body().string();
+                            if (body.isEmpty()) {
+                                Log.d("LyricsFetch", "⚠️ Stage 1 returned empty body");
+                                performBroadSearch(finalTitle, finalArtist, duration, targetSongPath);
+                                return;
+                            }
+                            JSONObject obj = new JSONObject(body);
+                            String synced = obj.optString("syncedLyrics", "");
+                            if (!synced.isEmpty() && !synced.equalsIgnoreCase("null")) {
+                                Log.d("LyricsFetch", "✅ [SUCCESS] Stage 1: Synced Lyrics Found!");
+                                processLrcResult(obj, targetSongPath);
+                            } else {
+                                Log.d("LyricsFetch", "⚠️ [PARTIAL] Stage 1 got result but NO Synced Lyrics. Trying Stage 2 Search...");
+                                performBroadSearch(finalTitle, finalArtist, duration, targetSongPath);
+                            }
+                        } else {
+                            Log.d("LyricsFetch", "⚠️ [FAILED] Stage 1 Response Code: " + resp.code() + ". Moving to Stage 2...");
+                            performBroadSearch(finalTitle, finalArtist, duration, targetSongPath);
+                        }
+                    } catch (Exception e) {
+                        Log.e("LyricsFetch", "❌ [ERROR] Stage 1 Exception", e);
+                        performBroadSearch(finalTitle, finalArtist, duration, targetSongPath);
+                    }
+                }
+            });
+        } else {
+            Log.d("LyricsFetch", "⏭️ [SKIP] No Artist metadata. Skipping Stage 1, starting Stage 2...");
+            performBroadSearch(finalTitle, "", duration, targetSongPath);
+        }
+    }
+
+    private void performBroadSearch(String title, String artist, int targetDuration, String targetPath) {
+        // Priority 2: Broad Search (Artist + Title or Title only)
+        Log.d("LyricsFetch", "🔍 [STAGE 2] Broad Searching for: " + (artist + " " + title).trim());
+        HttpUrl.Builder urlBuilder = Objects.requireNonNull(HttpUrl.parse("https://lrclib.net/api/search")).newBuilder();
+        
+        if (!artist.isEmpty()) {
+            urlBuilder.addQueryParameter("artist_name", artist);
+            urlBuilder.addQueryParameter("track_name", title);
+        }
+        urlBuilder.addQueryParameter("q", (artist + " " + title).trim());
+        
         Request request = new Request.Builder()
-                .url(url)
-                .header("User-Agent", "AllTimeMusic/1.0 (https://github.com/HarshChawariya/AllTimeMusic)")
+                .url(urlBuilder.build())
+                .header("User-Agent", "AllTimeMusic/1.7")
                 .build();
 
         client.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                if (targetSongPath.equals(lastLoadedSongId)) {
-                    // Show offline instructions instead of generic connection error
-                    updateLyricsUI("Add lyrics manually.\n\t\tor\nGo to online mode.");
-                }
+                Log.e("LyricsFetch", "❌ [FAILED] Stage 2 Network Error");
+                if (targetPath.equals(lastLoadedSongId)) updateLyricsUI(getString(R.string.lyrics_not_found_ui));
             }
 
             @Override
             public void onResponse(@NonNull Call call, @NonNull Response response) {
-                try {
-                    if (response.isSuccessful() && response.body() != null) {
-                        String jsonData = response.body().string();
-                        JSONArray jsonArray = new JSONArray(jsonData);
-                        
-                        if (jsonArray.length() > 0) {
-                            String tempPlain = "";
-                            String tempSynced = "";
-                            
-                            // 1. If Synced Mode is ON, search for a result that HAS synced lyrics
-                            for (int i = 0; i < jsonArray.length(); i++) {
-                                JSONObject obj = jsonArray.getJSONObject(i);
-                                String synced = obj.optString("syncedLyrics", "");
-                                if (!synced.isEmpty() && !synced.equalsIgnoreCase("null")) {
-                                    tempSynced = synced;
-                                    tempPlain = obj.optString("plainLyrics", "");
-                                    Log.d("Lyrics_Fragment Method fetchLyricsOnline()", "Found Synced Lyrics: " + tempSynced);
+                try (Response resp = response) {
+                    if (resp.isSuccessful()) {
+                        JSONArray array = new JSONArray(resp.body().string());
+                        Log.d("LyricsFetch", "📊 [RESULTS] Stage 2 returned " + array.length() + " matches. Filtering...");
+                        if (array.length() > 0) {
+                            JSONObject bestMatch = null;
+
+                            // 1. High Priority: Duration Match +/- 2s AND Synced
+                            for (int i = 0; i < array.length(); i++) {
+                                JSONObject item = array.getJSONObject(i);
+                                int itemDuration = item.optInt("duration", 0);
+                                String synced = item.optString("syncedLyrics", "");
+                                
+                                if (Math.abs(itemDuration - targetDuration) <= 2 && !synced.isEmpty() && !synced.equalsIgnoreCase("null")) {
+                                    Log.d("LyricsFetch", "🎯 [FOUND] Best Match: Precision Duration (+/- 2s) + Synced Lyrics");
+                                    bestMatch = item;
                                     break;
                                 }
                             }
-                            
-                            // 2. Fallback: If no synced lyrics found take first plain
-                            if (tempPlain.isEmpty() || tempPlain.equalsIgnoreCase("null")) {
-                                JSONObject obj = jsonArray.getJSONObject(0);
-                                tempPlain = obj.optString("plainLyrics", "");
-                                tempSynced = obj.optString("syncedLyrics", "");
-                            }
-                            
-                            if ((tempPlain.isEmpty() || tempPlain.equalsIgnoreCase("null")) && 
-                                (tempSynced.isEmpty() || tempSynced.equalsIgnoreCase("null"))) {
-                                if (targetSongPath.equals(lastLoadedSongId)) updateLyricsUI("Lyrics found but text is empty.");
-                            } else {
-                                // Clean up data before saving (replace "null" string with actual empty string)
-                                String finalPlain = tempPlain.equalsIgnoreCase("null") ? "" : tempPlain;
-                                String finalSynced = tempSynced.equalsIgnoreCase("null") ? "" : tempSynced;
 
-                                // IMPORTANT: Save using the path this request was intended for
-                                FavoritesDatabase db = new FavoritesDatabase(getContext());
-                                db.saveLyrics(targetSongPath, finalPlain, finalSynced);
-
-                                // Update UI ONLY if this is still the active song
-                                if (targetSongPath.equals(lastLoadedSongId)) {
-                                    currentPlainLyrics = finalPlain;
-                                    currentSyncedLyrics = finalSynced;
-                                    if (isSyncedMode && !currentSyncedLyrics.isEmpty()) {
-                                        updateLyricsUI(currentSyncedLyrics);
-                                    } else {
-                                        if (isSyncedMode) showToast("Synced lyrics not available");
-                                        updateLyricsUI(currentPlainLyrics);
+                            // 2. Medium Priority: Any result that has Synced Lyrics (Ignore Duration)
+                            if (bestMatch == null) {
+                                for (int i = 0; i < array.length(); i++) {
+                                    JSONObject item = array.getJSONObject(i);
+                                    String synced = item.optString("syncedLyrics", "");
+                                    if (!synced.isEmpty() && !synced.equalsIgnoreCase("null")) {
+                                        Log.d("LyricsFetch", "✅ [FOUND] Alternative Match: Found Synced Lyrics (Duration mismatch)");
+                                        bestMatch = item;
+                                        break;
                                     }
                                 }
                             }
+
+                            // 3. Low Priority: Just Duration Match +/- 2s (No synced available)
+                            if (bestMatch == null) {
+                                for (int i = 0; i < array.length(); i++) {
+                                    JSONObject item = array.getJSONObject(i);
+                                    int itemDuration = item.optInt("duration", 0);
+                                    if (Math.abs(itemDuration - targetDuration) <= 2) {
+                                        Log.d("LyricsFetch", "📜 [FOUND] Fallback Match: Precision Duration but NO Synced available");
+                                        bestMatch = item;
+                                        break;
+                                    }
+                                }
+                            }
+
+                            // 4. Final Fallback: First available result
+                            if (bestMatch == null) {
+                                Log.d("LyricsFetch", "📋 [FOUND] Last Resort: Taking first available result.");
+                                bestMatch = array.getJSONObject(0);
+                            }
+                            
+                            processLrcResult(bestMatch, targetPath);
                         } else {
-                            fetchLyricsByTitleOnly(finalTitle, targetSongPath);
+                            Log.d("LyricsFetch", "⚠️ [NO-RESULTS] Stage 2 returned empty.");
+                            // Use Stage 3 Fallback
+                            fetchByTitleOnlyFallback(title, targetPath);
                         }
-                    } else {
-                        if (targetSongPath.equals(lastLoadedSongId)) updateLyricsUI("Lyrics not available.");
                     }
                 } catch (Exception e) {
-                    if (targetSongPath.equals(lastLoadedSongId)) updateLyricsUI("Error parsing lyrics.");
-                } finally {
-                    if (response.body() != null) response.close();
+                    Log.e("LyricsFetch", "❌ [ERROR] Stage 2 Processing Error", e);
+                    if (targetPath.equals(lastLoadedSongId)) updateLyricsUI(getString(R.string.error_parsing_lyrics));
                 }
             }
         });
     }
 
-    private void fetchLyricsByTitleOnly(String title, final String targetSongPath) {
+    private void fetchByTitleOnlyFallback(String title, final String targetPath) {
+        // Feature: Final fallback stage for extreme cases
+        Log.d("LyricsFetch", "🔄 [STAGE 3] Title-only fallback for: " + title);
         HttpUrl url = Objects.requireNonNull(HttpUrl.parse("https://lrclib.net/api/search"))
                 .newBuilder()
+                .addQueryParameter("track_name", title)
                 .addQueryParameter("q", title)
                 .build();
 
         Request request = new Request.Builder()
                 .url(url)
-                .header("User-Agent", "AllTimeMusic/1.0")
+                .header("User-Agent", "AllTimeMusic/1.5")
                 .build();
 
         client.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                if (targetSongPath.equals(lastLoadedSongId)) updateLyricsUI("Lyrics not found.");
+                if (targetPath.equals(lastLoadedSongId)) updateLyricsUI(getString(R.string.lyrics_not_found_ui));
             }
 
             @Override
             public void onResponse(@NonNull Call call, @NonNull Response response) {
-                try {
-                    if (response.isSuccessful() && response.body() != null) {
-                        JSONArray array = new JSONArray(response.body().string());
+                try (Response resp = response) {
+                    if (resp.isSuccessful()) {
+                        JSONArray array = new JSONArray(resp.body().string());
                         if (array.length() > 0) {
-                            JSONObject obj = array.getJSONObject(0);
-                            String synced = obj.optString("syncedLyrics", "");
-                            String plain = obj.optString("plainLyrics", "");
-
-                            Log.d("Lyrics_Fragment Method fetchLyricsByTitleOnly()", "Found Synced Lyrics: " + synced);
-
-                            // Clean up "null" strings before saving
-                            String finalPlain = plain.equalsIgnoreCase("null") ? "" : plain;
-                            String finalSynced = synced.equalsIgnoreCase("null") ? "" : synced;
-
-                            // Save to correct path
-                            FavoritesDatabase db = new FavoritesDatabase(getContext());
-                            db.saveLyrics(targetSongPath, finalPlain, finalSynced);
-
-                            if (targetSongPath.equals(lastLoadedSongId)) {
-                                currentSyncedLyrics = finalSynced;
-                                currentPlainLyrics = finalPlain;
-                                if (isSyncedMode && !currentSyncedLyrics.isEmpty()) {
-                                    updateLyricsUI(currentSyncedLyrics);
-                                } else if (!currentPlainLyrics.isEmpty()) {
-                                    if (isSyncedMode) showToast("Synced lyrics not available");
-                                    updateLyricsUI(currentPlainLyrics);
-                                } else {
-                                    updateLyricsUI("Lyrics not available.");
+                            // Prioritize synced even in title fallback
+                            JSONObject bestMatch = null;
+                            for (int i = 0; i < array.length(); i++) {
+                                JSONObject item = array.getJSONObject(i);
+                                if (!item.optString("syncedLyrics", "").isEmpty()) {
+                                    bestMatch = item;
+                                    break;
                                 }
                             }
+                            if (bestMatch == null) bestMatch = array.getJSONObject(0);
+                            processLrcResult(bestMatch, targetPath);
                         } else {
-                            if (targetSongPath.equals(lastLoadedSongId)) updateLyricsUI("Lyrics not found.");
+                            if (targetPath.equals(lastLoadedSongId))
+                                updateLyricsUI(getString(R.string.lyrics_not_found_ui));
                         }
-                    } else {
-                        if (targetSongPath.equals(lastLoadedSongId)) updateLyricsUI("Lyrics not found.");
                     }
                 } catch (Exception e) {
-                    if (targetSongPath.equals(lastLoadedSongId)) updateLyricsUI("Lyrics not found.");
-                } finally {
-                    if (response.body() != null) response.close();
+                    if (targetPath.equals(lastLoadedSongId))
+                        updateLyricsUI(getString(R.string.lyrics_not_found_ui));
                 }
             }
         });
+    }
+
+    private void processLrcResult(JSONObject obj, String targetPath) {
+        String synced = obj.optString("syncedLyrics", "");
+        String plain = obj.optString("plainLyrics", "");
+
+        // Clean up "null" strings
+        String finalPlain = (plain.isEmpty() || plain.equalsIgnoreCase("null")) ? "" : plain;
+        String finalSynced = (synced.isEmpty() || synced.equalsIgnoreCase("null")) ? "" : synced;
+
+        if (finalPlain.isEmpty() && finalSynced.isEmpty()) {
+            if (targetPath.equals(lastLoadedSongId) && getActivity() != null) {
+                getActivity().runOnUiThread(() -> updateLyricsUI(getString(R.string.lyrics_not_available_ui)));
+            }
+            return;
+        }
+
+        // Save to Database
+        try (FavoritesDatabase db = new FavoritesDatabase(getContext())) {
+            db.saveLyrics(targetPath, finalPlain, finalSynced);
+        }
+
+        // Update UI if still active
+        if (targetPath.equals(lastLoadedSongId) && getActivity() != null) {
+            currentPlainLyrics = finalPlain;
+            currentSyncedLyrics = finalSynced;
+            getActivity().runOnUiThread(() -> {
+                if (isSyncedMode && !currentSyncedLyrics.isEmpty()) {
+                    updateLyricsUI(currentSyncedLyrics);
+                } else if (!currentPlainLyrics.isEmpty()) {
+                    if (isSyncedMode) showToast(getString(R.string.synced_lyrics_not_available_toast));
+                    updateLyricsUI(currentPlainLyrics);
+                }
+            });
+        }
     }
 
     private void updateLyricsUI(String text) {
@@ -598,7 +657,7 @@ public class Lyrics_Fragment extends Fragment {
                         lines.add(new LyricLine(currentLineStartTime, text));
                     }
                 } catch (NumberFormatException e) {
-                    e.printStackTrace();
+                    Log.e("Lyrics_Fragment", "Error parsing LRC time", e);
                 }
             }
         }
@@ -651,19 +710,19 @@ public class Lyrics_Fragment extends Fragment {
             if (synced) {
                 if (!currentSyncedLyrics.isEmpty() && !currentSyncedLyrics.equalsIgnoreCase("null")) {
                     updateLyricsUI(currentSyncedLyrics);
-                    showToast("Synced Lyrics Enabled");
+                    showToast(getString(R.string.synced_lyrics_enabled_toast));
                 } else if (!currentPlainLyrics.isEmpty() && !currentPlainLyrics.equalsIgnoreCase("null")) {
                     updateLyricsUI(currentPlainLyrics);
-                    showToast("Synced lyrics not available");
+                    showToast(getString(R.string.synced_lyrics_not_available_toast));
                 } else {
-                    showToast("Lyrics not available");
+                    showToast(getString(R.string.lyrics_not_available_ui));
                 }
             } else {
                 if (!currentPlainLyrics.isEmpty() && !currentPlainLyrics.equalsIgnoreCase("null")) {
                     updateLyricsUI(currentPlainLyrics);
-                    showToast("Plain Lyrics Enabled");
+                    showToast(getString(R.string.plain_lyrics_enabled_toast));
                 } else {
-                    showToast("Lyrics not available");
+                    showToast(getString(R.string.lyrics_not_available_ui));
                 }
             }
         });
@@ -697,8 +756,9 @@ public class Lyrics_Fragment extends Fragment {
     public void deleteLyricsFromDB() {
         musicList_Structure current = musicList_Recycler_Adapter.currentItem;
         if (current != null) {
-            FavoritesDatabase db = new FavoritesDatabase(getContext());
-            db.deleteLyrics(current.songPath);
+            try (FavoritesDatabase db = new FavoritesDatabase(getContext())) {
+                db.deleteLyrics(current.songPath);
+            }
 
             // Clear current state and UI
             currentPlainLyrics = "";
@@ -707,10 +767,10 @@ public class Lyrics_Fragment extends Fragment {
             
             if (MainActivity.isOfflineMode) {
                 // 2. Offline Mode: Show manual instructions
-                updateLyricsUI("Add lyrics manually.\n\t\t\tor\nGo to online mode.");
+                updateLyricsUI(getString(R.string.add_lyrics_manually_online_instructions));
             } else {
                 // 1. Online Mode: Show loading and fetch again
-                updateLyricsUI(getString(R.string.lyrics_will_be_appearing));
+                updateLyricsUI(getString(R.string.searching_for_lyrics));
                 String displayArtist = current.getCleanArtist();
                 int durationSeconds = 0;
                 if (PlayList_Fragment.mediaPlayer != null) {
@@ -719,7 +779,7 @@ public class Lyrics_Fragment extends Fragment {
                 fetchLyricsOnline(current.songTitle, displayArtist, durationSeconds, current.songPath);
             }
 
-            showToast("Lyrics Deleted");
+            showToast(getString(R.string.lyrics_deleted));
         }
     }
 
@@ -736,6 +796,9 @@ public class Lyrics_Fragment extends Fragment {
         if (getContext() == null) return;
 
         BottomSheetDialog bottomSheetDialog = new BottomSheetDialog(getContext(), R.style.BottomSheetDialogTheme);
+        // Note: Passing null for root is acceptable for BottomSheetDialog content, but we can use findViewById(android.R.id.content) if needed to silence the warning.
+        // For fragments, it's safer to just let the dialog handle the layout.
+        @SuppressLint("InflateParams")
         View dialogView = getLayoutInflater().inflate(R.layout.dialog_add_lyrics, null);
         bottomSheetDialog.setContentView(dialogView);
 
@@ -756,21 +819,21 @@ public class Lyrics_Fragment extends Fragment {
         btnSave.setOnClickListener(v -> {
             String text = input.getText().toString().trim();
             if (text.isEmpty()) {
-                showToast("Please enter some lyrics");
+                showToast(getString(R.string.please_enter_some_lyrics));
                 return;
             }
 
             musicList_Structure current = musicList_Recycler_Adapter.currentItem;
             if (current != null && getContext() != null) {
-                FavoritesDatabase db = new FavoritesDatabase(getContext());
-                
-                // Smart Logic: If text contains typical LRC timestamps, treat as Synced
-                if (text.contains("[") && text.contains("]")) {
-                    db.saveLyrics(current.songPath, "", text); // Save as Synced
-                    showToast("Synced Lyrics Added");
-                } else {
-                    db.saveLyrics(current.songPath, text, ""); // Save as Plain
-                    showToast("Plain Lyrics Added");
+                try (FavoritesDatabase db = new FavoritesDatabase(getContext())) {
+                    // Smart Logic: If text contains typical LRC timestamps, treat as Synced
+                    if (text.contains("[") && text.contains("]")) {
+                        db.saveLyrics(current.songPath, "", text); // Save as Synced
+                        showToast(getString(R.string.synced_lyrics_added));
+                    } else {
+                        db.saveLyrics(current.songPath, text, ""); // Save as Plain
+                        showToast(getString(R.string.plain_lyrics_added));
+                    }
                 }
 
                 // Force UI refresh by resetting lastLoadedId
@@ -786,16 +849,17 @@ public class Lyrics_Fragment extends Fragment {
     public void openSyncedLyricsEditor() {
         musicList_Structure current = musicList_Recycler_Adapter.currentItem;
         if (current != null && getContext() != null) {
-            FavoritesDatabase db = new FavoritesDatabase(getContext());
-            String[] lyrics = db.getCachedLyrics(current.songPath);
+            try (FavoritesDatabase db = new FavoritesDatabase(getContext())) {
+                String[] lyrics = db.getCachedLyrics(current.songPath);
 
-            // Rule #3: If plain lyrics are missing, open Add Lyrics dialog first
-            if (lyrics == null || lyrics[0] == null || lyrics[0].isEmpty()) {
-                showToast("Please add plain lyrics first");
-                openAddLyricsDialog();
-            } else {
-                android.content.Intent intent = new android.content.Intent(getContext(), SyncedLyricsEditorActivity.class);
-                startActivity(intent);
+                // Rule #3: If plain lyrics are missing, open Add Lyrics dialog first
+                if (lyrics == null || lyrics[0] == null || lyrics[0].isEmpty()) {
+                    showToast(getString(R.string.please_add_plain_lyrics_first));
+                    openAddLyricsDialog();
+                } else {
+                    android.content.Intent intent = new android.content.Intent(getContext(), SyncedLyricsEditorActivity.class);
+                    startActivity(intent);
+                }
             }
         }
     }

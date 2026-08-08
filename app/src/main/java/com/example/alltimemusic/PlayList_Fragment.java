@@ -454,16 +454,16 @@ public class PlayList_Fragment extends Fragment {
         currentLyricIndex = -1;
 
         if (getContext() == null) return;
-        FavoritesDatabase db = new FavoritesDatabase(getContext());
-        String[] cached = db.getCachedLyrics(path);
-        
-        if (cached != null && cached[1] != null && !cached[1].isEmpty() && !cached[1].equalsIgnoreCase("null")) {
-            lyricLines = parseLRC(cached[1]);
-            if (!lyricLines.isEmpty()) {
-                if (syncedLyricsTxt != null) {
-                    syncedLyricsTxt.setVisibility(View.VISIBLE);
+        try (FavoritesDatabase db = new FavoritesDatabase(getContext())) {
+            String[] cached = db.getCachedLyrics(path);
+
+            if (cached != null && cached[1] != null && !cached[1].isEmpty() && !cached[1].equalsIgnoreCase("null")) {
+                lyricLines = parseLRC(cached[1]);
+                if (!lyricLines.isEmpty()) {
+                    if (syncedLyricsTxt != null) {
+                        syncedLyricsTxt.setVisibility(View.VISIBLE);
+                    }
                 }
-                return;
             }
         }
     }

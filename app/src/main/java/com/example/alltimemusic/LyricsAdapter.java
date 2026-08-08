@@ -5,6 +5,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.RecyclerView;
 import java.util.ArrayList;
 import java.util.List;
@@ -19,10 +20,34 @@ public class LyricsAdapter extends RecyclerView.Adapter<LyricsAdapter.ViewHolder
     private int activeIndex = -1;
     private OnLyricClickListener clickListener;
 
-    public void setLyrics(List<LyricLine> lyrics) {
-        this.lyrics = lyrics;
+    public void setLyrics(List<LyricLine> newLyrics) {
+        DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(new DiffUtil.Callback() {
+            @Override
+            public int getOldListSize() {
+                return lyrics.size();
+            }
+
+            @Override
+            public int getNewListSize() {
+                return newLyrics.size();
+            }
+
+            @Override
+            public boolean areItemsTheSame(int oldItemPosition, int newItemPosition) {
+                return lyrics.get(oldItemPosition).getTimeMs() == newLyrics.get(newItemPosition).getTimeMs();
+            }
+
+            @Override
+            public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
+                LyricLine oldLine = lyrics.get(oldItemPosition);
+                LyricLine newLine = newLyrics.get(newItemPosition);
+                return oldLine.getText().equals(newLine.getText());
+            }
+        });
+
+        this.lyrics = new ArrayList<>(newLyrics);
         this.activeIndex = -1;
-        notifyDataSetChanged();
+        diffResult.dispatchUpdatesTo(this);
     }
 
     public void setOnLyricClickListener(OnLyricClickListener listener) {

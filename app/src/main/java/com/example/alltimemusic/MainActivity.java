@@ -129,20 +129,21 @@ public class MainActivity extends AppCompatActivity {
             if (viewPager.getCurrentItem() == 1) {
                 musicList_Structure current = musicList_Recycler_Adapter.currentItem;
                 if (current != null) {
-                    FavoritesDatabase db = new FavoritesDatabase(this);
-                    String[] lyrics = db.getCachedLyrics(current.songPath);
+                    try (FavoritesDatabase db = new FavoritesDatabase(this)) {
+                        String[] lyrics = db.getCachedLyrics(current.songPath);
 
-                    // Logic: Show "Add Lyrics" if either type is missing
-                    boolean hasPlain = (lyrics != null && lyrics[0] != null && !lyrics[0].isEmpty());
-                    boolean hasSynced = (lyrics != null && lyrics[1] != null && !lyrics[1].isEmpty());
+                        // Logic: Show "Add Lyrics" if either type is missing
+                        boolean hasPlain = (lyrics != null && lyrics[0] != null && !lyrics[0].isEmpty());
+                        boolean hasSynced = (lyrics != null && lyrics[1] != null && !lyrics[1].isEmpty());
 
-                    if (!hasPlain || !hasSynced) {
-                        popup.addMenuItem("Add Lyrics");
-                    }
+                        if (!hasPlain || !hasSynced) {
+                            popup.addMenuItem(getString(R.string.add_lyrics_title));
+                        }
 
-                    // Logic: Show "Delete Lyrics" if any lyrics exist in DB
-                    if (lyrics != null && (hasPlain || hasSynced)) {
-                        popup.addMenuItem("Delete Lyrics");
+                        // Logic: Show "Delete Lyrics" if any lyrics exist in DB
+                        if (lyrics != null && (hasPlain || hasSynced)) {
+                            popup.addMenuItem(getString(R.string.delete_lyrics_menu));
+                        }
                     }
                 }
             }
@@ -238,13 +239,14 @@ public class MainActivity extends AppCompatActivity {
         }
 
         if (musicList != null && !musicList.isEmpty()) {
-            new FavoritesDatabase(this);
-            for (musicList_Structure song : musicList) {
-                song.isFavourite = FavoritesDatabase.favoriteList.stream()
-                        .anyMatch(fav -> Objects.equals(fav.songPath, song.songPath));
+            try (FavoritesDatabase db = new FavoritesDatabase(this)) {
+                for (musicList_Structure song : musicList) {
+                    song.isFavourite = FavoritesDatabase.favoriteList.stream()
+                            .anyMatch(fav -> Objects.equals(fav.songPath, song.songPath));
+                }
             }
-            if (recyclerView.getAdapter() != null) {
-                recyclerView.getAdapter().notifyDataSetChanged();
+            if (recyclerView.getAdapter() instanceof musicList_Recycler_Adapter) {
+                ((musicList_Recycler_Adapter) recyclerView.getAdapter()).setMusicList(musicList);
             }
         }
         updateMiniPlayer();
@@ -262,8 +264,8 @@ public class MainActivity extends AppCompatActivity {
         closePlayerLayout();
         updateMiniPlayer();
 
-        if (recyclerView.getAdapter() != null) {
-            recyclerView.getAdapter().notifyDataSetChanged();
+        if (recyclerView.getAdapter() instanceof musicList_Recycler_Adapter) {
+            ((musicList_Recycler_Adapter) recyclerView.getAdapter()).updateSelection(0);
         }
     }
 
@@ -596,29 +598,36 @@ hsv[2] = Math.max(Math.min(hsv[2], 0.35f), 0.15f);*/
                 int albumIdCol = cursor.getColumnIndex(MediaStore.Audio.Media.ALBUM_ID);
                 int displayCol = cursor.getColumnIndex(MediaStore.Audio.Media.DISPLAY_NAME);
 
-                new FavoritesDatabase(this);
+                try (FavoritesDatabase db = new FavoritesDatabase(this)) {
+                    do {
+                        String title = cursor.getString(titleCol);
+                        String path = cursor.getString(dataCol);
+                        String artist = cursor.getString(artistCol);
+                        long albumId = cursor.getLong(albumIdCol);
+                        String displayName = cursor.getString(displayCol);
 
-                do {
-                    String title = cursor.getString(titleCol);
-                    String path = cursor.getString(dataCol);
-                    String artist = cursor.getString(artistCol);
-                    long albumId = cursor.getLong(albumIdCol);
-                    String displayName = cursor.getString(displayCol);
-
-                    if (displayName != null && !displayName.isEmpty()) {
-                        String name = displayName.toLowerCase();
-                        if (name.endsWith(".mp3") && !name.startsWith(".") && !Character.isDigit(name.charAt(0)) && Character.isAlphabetic(name.charAt(0))) {
-                            musicList_Structure song = new musicList_Structure(title, path, artist, albumId);
-                            song.isFavourite = FavoritesDatabase.favoriteList.stream().anyMatch(f -> Objects.equals(f.songPath, path));
-                            musicList.add(song);
+                        if (displayName != null && !displayName.isEmpty()) {
+                            String name = displayName.toLowerCase();
+                            if (name.endsWith(".mp3") && !name.startsWith(".") && !Character.isDigit(name.charAt(0)) && Character.isAlphabetic(name.charAt(0))) {
+                                musicList_Structure song = new musicList_Structure(title, path, artist, albumId);
+                                song.isFavourite = FavoritesDatabase.favoriteList.stream().anyMatch(f -> Objects.equals(f.songPath, path));
+                                musicList.add(song);
+                            }
                         }
-                    }
-                } while (cursor.moveToNext());
+                    } while (cursor.moveToNext());
+                }
             }
         }
 
         musicList.sort((o1, o2) -> o1.songTitle.compareToIgnoreCase(o2.songTitle));
-        recyclerView.setAdapter(new musicList_Recycler_Adapter(this, musicList));
+        
+        // Use DiffUtil by reusing the adapter
+        if (recyclerView.getAdapter() instanceof musicList_Recycler_Adapter) {
+            ((musicList_Recycler_Adapter) recyclerView.getAdapter()).setMusicList(musicList);
+        } else {
+            recyclerView.setAdapter(new musicList_Recycler_Adapter(this, musicList));
+        }
+
         if (!musicList.isEmpty()) {
             alphabet.setText(String.valueOf(musicList.get(0).songTitle.charAt(0)).toUpperCase());
         } else {

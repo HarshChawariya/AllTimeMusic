@@ -1,26 +1,20 @@
 package com.example.alltimemusic;
 
 import android.annotation.SuppressLint;
-import android.content.ContentUris;
 import android.content.Context;
 import android.graphics.Color;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.media.MediaMetadataRetriever;
+
 import android.view.LayoutInflater;
-import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
 import android.widget.ImageView;
-import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
-import androidx.appcompat.widget.PopupMenu;
-import androidx.core.widget.PopupMenuCompat;
+import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
@@ -28,13 +22,12 @@ import com.bumptech.glide.load.resource.bitmap.CenterCrop;
 import com.google.android.material.imageview.ShapeableImageView;
 
 import java.util.ArrayList;
-import java.util.Objects;
 
 public class musicList_Recycler_Adapter extends RecyclerView.Adapter<musicList_Recycler_Adapter.ViewHolder> {
     private int lastPosition = -1;
     private int selectedPosition = -1;
     private final Context context;
-    private final ArrayList<musicList_Structure> musicList;
+    private ArrayList<musicList_Structure> musicList;
     public static musicList_Structure currentItem;
     public static ArrayList<musicList_Structure> fullMusicList;
     public static int currentPosition;
@@ -75,7 +68,7 @@ public class musicList_Recycler_Adapter extends RecyclerView.Adapter<musicList_R
         boolean isCurrentPlaying = false;
         if (currentItem != null && item.songPath.equals(currentItem.songPath)) {
             isCurrentPlaying = true;
-            selectedPosition = position; // Update internal selection for this list context
+            selectedPosition = position; 
         }
 
         if (isCurrentPlaying) {
@@ -134,14 +127,14 @@ public class musicList_Recycler_Adapter extends RecyclerView.Adapter<musicList_R
         holder.recyclerThreeDot.setOnClickListener(view -> {
             CustomPopupMenu popupMenu = new CustomPopupMenu(context, view);
             popupMenu.setItemTextColor(MainActivity.lastDynamicColor);
-            popupMenu.addMenuItem("Play Next");
+            popupMenu.addMenuItem(context.getString(R.string.play_next));
             
             // Check if song is already favorite to show correct menu option
-            String favoriteOption = item.isFavourite ? "Removed From Favourite" : "Add To Favourite";
+            String favoriteOption = item.isFavourite ? context.getString(R.string.removed_from_favorite) : context.getString(R.string.added_to_favorite);
             popupMenu.addMenuItem(favoriteOption);
 
             popupMenu.setOnItemClickListener(title -> {
-                if (title.equals("Play Next")) {
+                if (title.equals(context.getString(R.string.play_next))) {
                     int currentIdx = holder.getBindingAdapterPosition();
                     if (currentIdx == RecyclerView.NO_POSITION) return;
                     
@@ -149,7 +142,7 @@ public class musicList_Recycler_Adapter extends RecyclerView.Adapter<musicList_R
                     
                     if (PlayList_Fragment.mediaPlayer != null && PlayList_Fragment.mediaPlayer.isPlaying()) {
                         PlayList_Fragment.arrPlayNext.add(selectedSong);
-                        Toast.makeText(context, "Playing next turn: " + selectedSong.songTitle, Toast.LENGTH_SHORT).show();
+                        Toast.makeText(context, context.getString(R.string.playing_next_turn, selectedSong.songTitle), Toast.LENGTH_SHORT).show();
                     } else {
                         currentItem = selectedSong;
                         currentPosition = currentIdx;
@@ -161,17 +154,18 @@ public class musicList_Recycler_Adapter extends RecyclerView.Adapter<musicList_R
                             ((LikedSongsActivity) context).openPlayerLayout();
                         }
                     }
-                } else if (title.equals("Add To Favourite") || title.equals("Removed From Favourite")) {
+                } else if (title.equals(context.getString(R.string.added_to_favorite)) || title.equals(context.getString(R.string.removed_from_favorite))) {
                     // Toggle favorite logic
-                    FavoritesDatabase db = new FavoritesDatabase(context);
-                    if (item.isFavourite) {
-                        db.removeFavorite(item.songPath);
-                        item.isFavourite = false;
-                        Toast.makeText(context, "Removed From Favourite", Toast.LENGTH_SHORT).show();
-                    } else {
-                        db.addFavorite(item);
-                        item.isFavourite = true;
-                        Toast.makeText(context, "Added To Favourite", Toast.LENGTH_SHORT).show();
+                    try (FavoritesDatabase db = new FavoritesDatabase(context)) {
+                        if (item.isFavourite) {
+                            db.removeFavorite(item.songPath);
+                            item.isFavourite = false;
+                            Toast.makeText(context, context.getString(R.string.removed_from_favorite), Toast.LENGTH_SHORT).show();
+                        } else {
+                            db.addFavorite(item);
+                            item.isFavourite = true;
+                            Toast.makeText(context, context.getString(R.string.added_to_favorite), Toast.LENGTH_SHORT).show();
+                        }
                     }
                     
                     // Update visual heart indicator
@@ -212,14 +206,47 @@ public class musicList_Recycler_Adapter extends RecyclerView.Adapter<musicList_R
             }
         }
         
-        // Safety: We only call notifyItemChanged if the positions are valid for the current list state.
-        int count = getItemCount();
-        if (previous != -1 && previous < count) {
+        // Target specifically only the items that changed state
+        if (previous != -1 && previous < getItemCount()) {
             notifyItemChanged(previous);
         }
-        if (selectedPosition != -1 && selectedPosition < count) {
+        if (selectedPosition != -1 && selectedPosition < getItemCount()) {
             notifyItemChanged(selectedPosition);
         }
+    }
+
+    /**
+     * Professional way to update the entire list using DiffUtil.
+     * Replaces the inefficient notifyDataSetChanged().
+     */
+    public void setMusicList(ArrayList<musicList_Structure> newList) {
+        DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(new DiffUtil.Callback() {
+            @Override
+            public int getOldListSize() {
+                return musicList != null ? musicList.size() : 0;
+            }
+
+            @Override
+            public int getNewListSize() {
+                return newList != null ? newList.size() : 0;
+            }
+
+            @Override
+            public boolean areItemsTheSame(int oldItemPosition, int newItemPosition) {
+                return musicList.get(oldItemPosition).songPath.equals(newList.get(newItemPosition).songPath);
+            }
+
+            @Override
+            public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
+                musicList_Structure oldItem = musicList.get(oldItemPosition);
+                musicList_Structure newItem = newList.get(newItemPosition);
+                return oldItem.songTitle.equals(newItem.songTitle) &&
+                        oldItem.isFavourite == newItem.isFavourite;
+            }
+        });
+
+        this.musicList = new ArrayList<>(newList);
+        diffResult.dispatchUpdatesTo(this);
     }
 
     private void updateListProfileImage(ImageView imageView, musicList_Structure item) {

@@ -93,14 +93,14 @@ public class FavoritesDatabase extends SQLiteOpenHelper {
         try (SQLiteDatabase db = this.getReadableDatabase();
              Cursor cursor = db.query(TABLE_LYRICS, new String[]{COLUMN_LYRICS_PLAIN, COLUMN_LYRICS_SYNCED},
                      COLUMN_PATH + "=?", new String[]{path}, null, null, null)) {
-            if (cursor != null && cursor.moveToFirst()) {
+            if (cursor.moveToFirst()) {
                 return new String[]{
                         cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_LYRICS_PLAIN)),
                         cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_LYRICS_SYNCED))
                 };
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            android.util.Log.e("FavoritesDatabase", "Error fetching cached lyrics", e);
         }
         return null;
     }

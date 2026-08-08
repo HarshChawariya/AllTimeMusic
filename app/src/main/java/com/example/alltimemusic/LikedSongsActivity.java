@@ -1,9 +1,5 @@
 package com.example.alltimemusic;
 
-import android.content.ContentUris;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.media.MediaMetadataRetriever;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -29,6 +25,7 @@ public class LikedSongsActivity extends AppCompatActivity {
     RecyclerView recyclerView;
     ImageView backBtn;
     ArrayList<musicList_Structure> likedSongs;
+    private musicList_Recycler_Adapter adapter;
 
     private LinearLayout miniPlayer;
     private TextView miniPlayerText;
@@ -196,9 +193,13 @@ public class LikedSongsActivity extends AppCompatActivity {
     private void loadLikedSongs() {
         likedSongs = FavoritesDatabase.favoriteList;
         if (likedSongs != null) {
-            musicList_Recycler_Adapter adapter = new musicList_Recycler_Adapter(this, likedSongs);
-            recyclerView.setLayoutManager(new LinearLayoutManager(this));
-            recyclerView.setAdapter(adapter);
+            if (adapter == null) {
+                adapter = new musicList_Recycler_Adapter(this, likedSongs);
+                recyclerView.setLayoutManager(new LinearLayoutManager(this));
+                recyclerView.setAdapter(adapter);
+            } else {
+                adapter.setMusicList(likedSongs);
+            }
             updateRecyclerViewSelection();
         }
     }

@@ -169,7 +169,7 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
                 if (selectedIndex == position) {
                     selectedIndex = -1;
                     adapter.setActiveIndex(-1);
-                    currentLineDisplay.setText("Select a line to start syncing");
+                    currentLineDisplay.setText(getString(R.string.select_line_to_start));
                 } else if (selectedIndex > position) {
                     selectedIndex--; // Maintain correct index after removal
                 }
@@ -177,7 +177,7 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
                 lyricLines.remove(position);
                 adapter.notifyItemRemoved(position);
                 adapter.notifyItemRangeChanged(position, lyricLines.size());
-                Toast.makeText(SyncedLyricsEditorActivity.this, "Line Deleted", Toast.LENGTH_SHORT).show();
+                Toast.makeText(SyncedLyricsEditorActivity.this, getString(R.string.line_deleted_toast), Toast.LENGTH_SHORT).show();
             }
 
             @Override
@@ -333,7 +333,7 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
             // Since I cannot modify MainActivity easily here, I'll rely on common fragment access.
         });
 
-        optionsMenuBtn.setOnClickListener(v -> showOptionsMenu(v));
+        optionsMenuBtn.setOnClickListener(this::showOptionsMenu);
 
         seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
@@ -375,22 +375,23 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
     }
 
     private void loadLyricsWithPriority() {
-        FavoritesDatabase db = new FavoritesDatabase(this);
-        String[] lyrics = db.getCachedLyrics(currentSong.songPath);
-        lyricLines.clear();
+        try (FavoritesDatabase db = new FavoritesDatabase(this)) {
+            String[] lyrics = db.getCachedLyrics(currentSong.songPath);
+            lyricLines.clear();
 
-        if (lyrics != null) {
-            String synced = lyrics[1];
-            String plain = lyrics[0];
+            if (lyrics != null) {
+                String synced = lyrics[1];
+                String plain = lyrics[0];
 
-            if (synced != null && !synced.isEmpty() && !synced.equalsIgnoreCase("null")) {
-                // Priority 1: Synced Lyrics
-                isEditingSynced = true;
-                parseLyricsToLines(synced);
-            } else if (plain != null && !plain.isEmpty() && !plain.equalsIgnoreCase("null")) {
-                // Priority 2: Plain Lyrics
-                isEditingSynced = false;
-                parseLyricsToLines(plain);
+                if (synced != null && !synced.isEmpty() && !synced.equalsIgnoreCase("null")) {
+                    // Priority 1: Synced Lyrics
+                    isEditingSynced = true;
+                    parseLyricsToLines(synced);
+                } else if (plain != null && !plain.isEmpty() && !plain.equalsIgnoreCase("null")) {
+                    // Priority 2: Plain Lyrics
+                    isEditingSynced = false;
+                    parseLyricsToLines(plain);
+                }
             }
         }
     }
@@ -427,40 +428,42 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
                 }
             }
         }
-        if (adapter != null) adapter.notifyDataSetChanged();
+        if (adapter != null) adapter.setLyrics(lyricLines);
     }
 
     private void showOptionsMenu(View view) {
         CustomPopupMenu popup = new CustomPopupMenu(this, view);
         popup.setItemTextColor(MainActivity.lastDynamicColor);
-        popup.addMenuItem("Edit Plain Lyrics");
-        popup.addMenuItem("Edit Synced Lyrics");
+        popup.addMenuItem(getString(R.string.edit_plain_lyrics));
+        popup.addMenuItem(getString(R.string.edit_synced_lyrics));
         
         popup.setOnItemClickListener(title -> {
-            FavoritesDatabase db = new FavoritesDatabase(this);
-            String[] lyrics = db.getCachedLyrics(currentSong.songPath);
-            
-            if (title.equals("Edit Plain Lyrics")) {
-                isEditingSynced = false;
-                if (lyrics != null) parseLyricsToLines(lyrics[0]);
-            } else if (title.equals("Edit Synced Lyrics")) {
-                isEditingSynced = true;
-                if (lyrics != null) parseLyricsToLines(lyrics[1]);
+            try (FavoritesDatabase db = new FavoritesDatabase(this)) {
+                String[] lyrics = db.getCachedLyrics(currentSong.songPath);
+
+                if (title.equals(getString(R.string.edit_plain_lyrics))) {
+                    isEditingSynced = false;
+                    if (lyrics != null) parseLyricsToLines(lyrics[0]);
+                } else if (title.equals(getString(R.string.edit_synced_lyrics))) {
+                    isEditingSynced = true;
+                    if (lyrics != null) parseLyricsToLines(lyrics[1]);
+                }
             }
         });
         popup.show(view);
     }
 
     private void loadPlainLyrics() {
-        FavoritesDatabase db = new FavoritesDatabase(this);
-        String[] lyrics = db.getCachedLyrics(currentSong.songPath);
-        if (lyrics != null && lyrics[0] != null && !lyrics[0].isEmpty()) {
-            String plain = lyrics[0];
-            String[] lines = plain.split("\n");
-            lyricLines.clear();
-            for (String line : lines) {
-                if (!line.trim().isEmpty()) {
-                    lyricLines.add(new LyricLine(0, line.trim()));
+        try (FavoritesDatabase db = new FavoritesDatabase(this)) {
+            String[] lyrics = db.getCachedLyrics(currentSong.songPath);
+            if (lyrics != null && lyrics[0] != null && !lyrics[0].isEmpty()) {
+                String plain = lyrics[0];
+                String[] lines = plain.split("\n");
+                lyricLines.clear();
+                for (String line : lines) {
+                    if (!line.trim().isEmpty()) {
+                        lyricLines.add(new LyricLine(0, line.trim()));
+                    }
                 }
             }
         }
@@ -485,10 +488,10 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
 
     private void updateTimestampButtonStyle(long timeMs) {
         if (timeMs > 0) {
-            btnSetTimestamp.setText("Clear Time Stamp");
+            btnSetTimestamp.setText(getString(R.string.clear_time_stamp));
             btnSetTimestamp.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.GRAY));
         } else {
-            btnSetTimestamp.setText("Set Time Stamp");
+            btnSetTimestamp.setText(getString(R.string.set_time_stamp));
             btnSetTimestamp.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#9D201A")));
         }
     }
@@ -525,14 +528,14 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
     private void showEditDialog(int index) {
         saveStateToUndo();
         android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this);
-        builder.setTitle("Please! Edit Your Lyric.");
+        builder.setTitle(getString(R.string.edit_lyric_line_dialog));
         
         final EditText input = new EditText(this);
         input.setText(lyricLines.get(index).getText());
         input.setPadding(40, 40, 40, 40);
         builder.setView(input);
 
-        builder.setPositiveButton("Save", (dialog, which) -> {
+        builder.setPositiveButton(getString(R.string.save_btn), (dialog, which) -> {
             String newText = input.getText().toString().trim();
             if (!newText.isEmpty()) {
                 LyricLine old = lyricLines.get(index);
@@ -541,21 +544,21 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
                 if (index == selectedIndex) currentLineDisplay.setText(newText);
             }
         });
-        builder.setNegativeButton("Cancel", (dialog, which) -> dialog.cancel());
+        builder.setNegativeButton(getString(R.string.cancel_btn), (dialog, which) -> dialog.cancel());
         builder.show();
     }
 
     private void addNewLineDialog(int index, String initialText) {
         saveStateToUndo();
         android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this);
-        builder.setTitle("Please! Enter Your Lyric.");
+        builder.setTitle(getString(R.string.add_lyric_line_dialog));
         
         final EditText input = new EditText(this);
         input.setText(initialText);
         input.setPadding(40, 40, 40, 40);
         builder.setView(input);
 
-        builder.setPositiveButton("Add", (dialog, which) -> {
+        builder.setPositiveButton(getString(R.string.add_btn), (dialog, which) -> {
             String newText = input.getText().toString().trim();
             if (!newText.isEmpty()) {
                 lyricLines.add(index, new LyricLine(0, newText));
@@ -563,7 +566,7 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
                 adapter.notifyItemRangeChanged(index, lyricLines.size());
             }
         });
-        builder.setNegativeButton("Cancel", (dialog, which) -> dialog.cancel());
+        builder.setNegativeButton(getString(R.string.cancel_btn), (dialog, which) -> dialog.cancel());
         builder.show();
     }
 
@@ -586,10 +589,11 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
             
             lyricLines.clear();
             lyricLines.addAll(undoStack.pop());
-            adapter.notifyDataSetChanged();
+            adapter.setLyrics(lyricLines);
             if (selectedIndex != -1) selectLine(Math.min(selectedIndex, lyricLines.size()-1));
+            Toast.makeText(this, getString(R.string.undo_successful), Toast.LENGTH_SHORT).show();
         } else {
-            Toast.makeText(this, "Nothing To Undo", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.nothing_to_undo), Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -603,11 +607,11 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
             
             lyricLines.clear();
             lyricLines.addAll(redoStack.pop());
-            adapter.notifyDataSetChanged();
+            adapter.setLyrics(lyricLines);
             if (selectedIndex != -1) selectLine(Math.min(selectedIndex, lyricLines.size()-1));
-            Toast.makeText(this, "Redo Successful", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.redo_successful), Toast.LENGTH_SHORT).show();
         } else {
-            Toast.makeText(this, "Nothing to Redo", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.nothing_to_redo), Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -669,9 +673,11 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
             syncedBuilder.append(timestamp).append(line.getText()).append("\n");
         }
 
-        FavoritesDatabase db = new FavoritesDatabase(this);
-        db.saveLyrics(currentSong.songPath, null, syncedBuilder.toString());
-        if (showToast) Toast.makeText(this, "Lyrics Synced & Saved!", Toast.LENGTH_SHORT).show();
+        try (FavoritesDatabase db = new FavoritesDatabase(this)) {
+            db.saveLyrics(currentSong.songPath, null, syncedBuilder.toString());
+            if (showToast)
+                Toast.makeText(this, getString(R.string.lyrics_synced_saved), Toast.LENGTH_SHORT).show();
+        }
     }
 
     @Override
