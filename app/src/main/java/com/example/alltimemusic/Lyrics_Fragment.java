@@ -653,7 +653,7 @@ public class Lyrics_Fragment extends Fragment {
         if (text == null || text.trim().isEmpty()) return false;
         
         // Remove symbols, digits, punctuation, and common lyrics junk
-        String clean = text.replaceAll("[\\s\\d\\p{P}\\p{S}♪\\[\\]\\.:]", "");
+        String clean = text.replaceAll("[\\s\\d\\p{P}\\p{S}♪\\[\\].:]", "");
         
         if (clean.isEmpty()) return true; // Just music notes or numbers is okay
         
@@ -665,7 +665,7 @@ public class Lyrics_Fragment extends Fragment {
                 supported++;
             }
             // Hindi range (Devanagari)
-            else if (c >= '\u0900' && c <= '\u097F') {
+            else if (c >= 'ऀ' && c <= 'ॿ') {
                 supported++;
             }
         }
