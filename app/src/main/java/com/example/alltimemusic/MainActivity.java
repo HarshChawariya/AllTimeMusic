@@ -126,7 +126,7 @@ public class MainActivity extends AppCompatActivity {
             popup.setItemTextColor(lastDynamicColor);
             popup.addMenuItem("Plain Lyrics");
             popup.addMenuItem("Synced Lyrics");
-            popup.addMenuItem("Synced Lyrics Editor");
+            popup.addMenuItem("Lyrics Editor");
             
             // Only show Add/Delete Lyrics if we are on the Lyrics tab (index 1)
             if (viewPager.getCurrentItem() == 1) {
@@ -180,7 +180,7 @@ public class MainActivity extends AppCompatActivity {
                             }
                         }
                         break;
-                    case "Synced Lyrics Editor":
+                    case "Lyrics Editor":
                         for (Fragment fragment : getSupportFragmentManager().getFragments()) {
                             if (fragment instanceof Lyrics_Fragment) {
                                 ((Lyrics_Fragment) fragment).openSyncedLyricsEditor();
