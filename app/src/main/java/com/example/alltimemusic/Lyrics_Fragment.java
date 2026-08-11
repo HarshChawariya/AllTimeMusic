@@ -67,11 +67,11 @@ public class Lyrics_Fragment extends Fragment {
                 try {
                     int currentPos = PlayList_Fragment.mediaPlayer.getCurrentPosition();
                     miniProgressBar.setProgress(currentPos);
-                    
+
                     if (isSyncedMode && !lyricLines.isEmpty()) {
                         updateActiveLyricLine(currentPos);
                     }
-                    
+
                     if (PlayList_Fragment.mediaPlayer.isPlaying()) {
                         lyricsHandler.postDelayed(this, 200); // More frequent updates for smooth sync
                     }
@@ -130,7 +130,7 @@ public class Lyrics_Fragment extends Fragment {
         lyricsRecycler = view.findViewById(R.id.lyrics_recycler);
         topFadeView = view.findViewById(R.id.lyrics_top_fade_view);
         bottomFadeView = view.findViewById(R.id.lyrics_bottom_fade_view);
-        
+
         lyricsAdapter = new LyricsAdapter();
         lyricsAdapter.setOnLyricClickListener(timeMs -> {
             if (PlayList_Fragment.mediaPlayer != null) {
@@ -147,7 +147,7 @@ public class Lyrics_Fragment extends Fragment {
         });
         lyricsRecycler.setLayoutManager(new LinearLayoutManager(getContext()));
         lyricsRecycler.setAdapter(lyricsAdapter);
-        
+
         // Initialize Mini Player views from included layout
         miniSongTitle = view.findViewById(R.id.dialog_txt);
         miniPause = view.findViewById(R.id.dialog_pause);
@@ -164,7 +164,7 @@ public class Lyrics_Fragment extends Fragment {
         song_name.setText(mParam1);
         artist_name.setText(mParam2);
         lyricsTxt.setText(mParam3);
-        
+
         // BUG FIX: Immediately sync fades with the current global dynamic color on view creation
         updateInternalColors(MainActivity.lastDynamicColor);
 
@@ -201,7 +201,7 @@ public class Lyrics_Fragment extends Fragment {
 
             // Display the song title as is (preserving _ and -)
             song_name.setText(current.songTitle);
-            
+
             // Display the smart cleaned artist
             String displayArtist = current.getCleanArtist();
             artist_name.setText(displayArtist);
@@ -216,33 +216,32 @@ public class Lyrics_Fragment extends Fragment {
             if (PlayList_Fragment.mediaPlayer != null) {
                 durationSeconds = PlayList_Fragment.mediaPlayer.getDuration() / 1000;
             }
-            
+
             // FEATURE: Check Offline Database Cache
-            try (FavoritesDatabase db = new FavoritesDatabase(getContext())) {
-                String[] cached = db.getCachedLyrics(current.songPath);
-                
-                if (cached != null) {
-                    // Use cached lyrics if available
-                    currentPlainLyrics = cached[0];
-                    currentSyncedLyrics = cached[1];
-                    
-                    if (isSyncedMode && !currentSyncedLyrics.isEmpty() && !currentSyncedLyrics.equalsIgnoreCase("null")) {
-                        updateLyricsUI(currentSyncedLyrics);
-                    } else {
-                        updateLyricsUI(currentPlainLyrics);
-                    }
+            FavoritesDatabase db = FavoritesDatabase.getInstance(getContext());
+            String[] cached = db.getCachedLyrics(current.songPath);
+
+            if (cached != null) {
+                // Use cached lyrics if available
+                currentPlainLyrics = cached[0];
+                currentSyncedLyrics = cached[1];
+
+                if (isSyncedMode && !currentSyncedLyrics.isEmpty() && !currentSyncedLyrics.equalsIgnoreCase("null")) {
+                    updateLyricsUI(currentSyncedLyrics);
                 } else {
-                    // Check if in Offline Mode
-                    if (MainActivity.isOfflineMode) {
-                        updateLyricsUI(getString(R.string.offline_lyrics_not_found_instructions));
-                        showToast(getString(R.string.offline_lyrics_not_found));
-                    } else {
-                        // Fetch lyrics online with a specific ID check
-                        fetchLyricsOnline(current.songTitle, displayArtist, durationSeconds, current.songPath);
-                    }
+                    updateLyricsUI(currentPlainLyrics);
+                }
+            } else {
+                // Check if in Offline Mode
+                if (MainActivity.isOfflineMode) {
+                    updateLyricsUI(getString(R.string.offline_lyrics_not_found_instructions));
+                    showToast(getString(R.string.offline_lyrics_not_found));
+                } else {
+                    // Fetch lyrics online with a specific ID check
+                    fetchLyricsOnline(current.songTitle, displayArtist, durationSeconds, current.songPath);
                 }
             }
-            
+
             miniSongTitle.setText(current.songTitle);
             if (PlayList_Fragment.mediaPlayer != null) {
                 miniProgressBar.setMax(PlayList_Fragment.mediaPlayer.getDuration());
@@ -330,7 +329,7 @@ public class Lyrics_Fragment extends Fragment {
 
     private void fetchLyricsOnline(String title, String artist, int duration, final String targetSongPath) {
         if (lyricsTxt == null) return;
-        
+
         if (getActivity() != null) {
             getActivity().runOnUiThread(() -> {
                 if (lyricsRecycler != null) lyricsRecycler.setVisibility(View.GONE);
@@ -338,7 +337,7 @@ public class Lyrics_Fragment extends Fragment {
                 lyricsTxt.setText(R.string.searching_for_lyrics);
             });
         }
-        
+
         // Step 1: Accurate cleaning for search
         String cleanTitle = cleanString(title);
         String cleanArtist = cleanString(artist);
@@ -359,7 +358,7 @@ public class Lyrics_Fragment extends Fragment {
                 }
             }
         }
-        
+
         final String finalArtist = cleanArtist;
         final String finalTitle = cleanTitle;
 
@@ -400,7 +399,7 @@ public class Lyrics_Fragment extends Fragment {
                             JSONObject obj = new JSONObject(body);
                             String plain = obj.optString("plainLyrics", "");
                             String synced = obj.optString("syncedLyrics", "");
-                            
+
                             // NEW: Check Language
                             if (isSupportedLanguage(plain + synced)) {
                                 if (!synced.isEmpty() && !synced.equalsIgnoreCase("null")) {
@@ -434,13 +433,13 @@ public class Lyrics_Fragment extends Fragment {
         // Priority 2: Broad Search (Artist + Title or Title only)
         Log.d("LyricsFetch", "🔍 [STAGE 2] Broad Searching for: " + (artist + " " + title).trim());
         HttpUrl.Builder urlBuilder = Objects.requireNonNull(HttpUrl.parse("https://lrclib.net/api/search")).newBuilder();
-        
+
         if (!artist.isEmpty()) {
             urlBuilder.addQueryParameter("artist_name", artist);
             urlBuilder.addQueryParameter("track_name", title);
         }
         urlBuilder.addQueryParameter("q", (artist + " " + title).trim());
-        
+
         Request request = new Request.Builder()
                 .url(urlBuilder.build())
                 .header("User-Agent", "AllTimeMusic/1.7")
@@ -450,7 +449,7 @@ public class Lyrics_Fragment extends Fragment {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 Log.e("LyricsFetch", "❌ [FAILED] Stage 2 Network Error");
-                if (targetPath.equals(lastLoadedSongId)) updateLyricsUI(getString(R.string.lyrics_not_found_ui));
+                fetchByTitleAndDuration(title, targetDuration, targetPath);
             }
 
             @Override
@@ -468,10 +467,10 @@ public class Lyrics_Fragment extends Fragment {
                                 int itemDuration = item.optInt("duration", 0);
                                 String synced = item.optString("syncedLyrics", "");
                                 String plain = item.optString("plainLyrics", "");
-                                
-                                if (Math.abs(itemDuration - targetDuration) <= 2 && 
-                                    !synced.isEmpty() && !synced.equalsIgnoreCase("null") &&
-                                    isSupportedLanguage(plain + synced)) {
+
+                                if (Math.abs(itemDuration - targetDuration) <= 2 &&
+                                        !synced.isEmpty() && !synced.equalsIgnoreCase("null") &&
+                                        isSupportedLanguage(plain + synced)) {
                                     Log.d("LyricsFetch", "🎯 [FOUND] Best Match: Precision Duration (+/- 2s) + Synced Lyrics + Supported Language");
                                     bestMatch = item;
                                     break;
@@ -484,8 +483,8 @@ public class Lyrics_Fragment extends Fragment {
                                     JSONObject item = array.getJSONObject(i);
                                     String synced = item.optString("syncedLyrics", "");
                                     String plain = item.optString("plainLyrics", "");
-                                    if (!synced.isEmpty() && !synced.equalsIgnoreCase("null") && 
-                                        isSupportedLanguage(plain + synced)) {
+                                    if (!synced.isEmpty() && !synced.equalsIgnoreCase("null") &&
+                                            isSupportedLanguage(plain + synced)) {
                                         Log.d("LyricsFetch", "✅ [FOUND] Alternative Match: Synced Lyrics + Supported Language (Duration mismatch)");
                                         bestMatch = item;
                                         break;
@@ -493,54 +492,83 @@ public class Lyrics_Fragment extends Fragment {
                                 }
                             }
 
-                            // 3. Low Priority: Just Duration Match +/- 2s AND Supported Language
-                            if (bestMatch == null) {
-                                for (int i = 0; i < array.length(); i++) {
-                                    JSONObject item = array.getJSONObject(i);
-                                    int itemDuration = item.optInt("duration", 0);
-                                    String plain = item.optString("plainLyrics", "");
-                                    String synced = item.optString("syncedLyrics", "");
-                                    if (Math.abs(itemDuration - targetDuration) <= 2 && isSupportedLanguage(plain + synced)) {
-                                        Log.d("LyricsFetch", "📜 [FOUND] Fallback Match: Precision Duration + Supported Language (No synced available)");
-                                        bestMatch = item;
-                                        break;
-                                    }
-                                }
-                            }
-
-                            // 4. Final Fallback: First available result with supported language
-                            if (bestMatch == null) {
-                                for (int i = 0; i < array.length(); i++) {
-                                    JSONObject item = array.getJSONObject(i);
-                                    String plain = item.optString("plainLyrics", "");
-                                    String synced = item.optString("syncedLyrics", "");
-                                    if (isSupportedLanguage(plain + synced)) {
-                                        Log.d("LyricsFetch", "📋 [FOUND] Last Resort: First result with supported language.");
-                                        bestMatch = item;
-                                        break;
-                                    }
-                                }
-                            }
-                            
                             if (bestMatch != null) {
                                 processLrcResult(bestMatch, targetPath);
                             } else {
-                                Log.d("LyricsFetch", "🚫 [REJECTED] All Stage 2 results are in unsupported languages.");
-                                fetchByTitleOnlyFallback(title, targetPath);
+                                Log.d("LyricsFetch", "🚫 [REJECTED] Stage 2 results failed language check. Moving to Title+Duration...");
+                                fetchByTitleAndDuration(title, targetDuration, targetPath);
                             }
                         } else {
-                            Log.d("LyricsFetch", "⚠️ [NO-RESULTS] Stage 2 returned empty.");
-                            // Use Stage 3 Fallback
-                            fetchByTitleOnlyFallback(title, targetPath);
+                            Log.d("LyricsFetch", "⚠️ [NO-RESULTS] Stage 2 empty. Moving to Title+Duration...");
+                            fetchByTitleAndDuration(title, targetDuration, targetPath);
                         }
+                    } else {
+                        fetchByTitleAndDuration(title, targetDuration, targetPath);
                     }
                 } catch (Exception e) {
                     Log.e("LyricsFetch", "❌ [ERROR] Stage 2 Processing Error", e);
-                    if (targetPath.equals(lastLoadedSongId)) updateLyricsUI(getString(R.string.error_parsing_lyrics));
+                    fetchByTitleAndDuration(title, targetDuration, targetPath);
                 }
             }
         });
     }
+
+    private void fetchByTitleAndDuration(String title, int targetDuration, final String targetPath) {
+        // Feature: Search using only title and duration (Useful when artist metadata is wrong)
+        Log.d("LyricsFetch", "🔄 [STAGE 3] Title + Duration search for: " + title + " (" + targetDuration + "s)");
+        HttpUrl url = Objects.requireNonNull(HttpUrl.parse("https://lrclib.net/api/search"))
+                .newBuilder()
+                .addQueryParameter("track_name", title)
+                .addQueryParameter("q", title)
+                .build();
+
+        Request request = new Request.Builder()
+                .url(url)
+                .header("User-Agent", "AllTimeMusic/1.7")
+                .build();
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                fetchByTitleOnlyFallback(title, targetPath);
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
+                try (Response resp = response) {
+                    if (resp.isSuccessful()) {
+                        JSONArray array = new JSONArray(resp.body().string());
+                        JSONObject bestMatch = null;
+                        
+                        for (int i = 0; i < array.length(); i++) {
+                            JSONObject item = array.getJSONObject(i);
+                            int itemDuration = item.optInt("duration", 0);
+                            String plain = item.optString("plainLyrics", "");
+                            String synced = item.optString("syncedLyrics", "");
+
+                            // Filter by duration +/- 2 seconds (Strict) and language
+                            if (Math.abs(itemDuration - targetDuration) <= 2 && isSupportedLanguage(plain + synced)) {
+                                bestMatch = item;
+                                Log.d("LyricsFetch", "🎯 [FOUND] Stage 3 Match: Title + Duration matched!");
+                                break;
+                            }
+                        }
+
+                        if (bestMatch != null) {
+                            processLrcResult(bestMatch, targetPath);
+                        } else {
+                            fetchByTitleOnlyFallback(title, targetPath);
+                        }
+                    } else {
+                        fetchByTitleOnlyFallback(title, targetPath);
+                    }
+                } catch (Exception e) {
+                    fetchByTitleOnlyFallback(title, targetPath);
+                }
+            }
+        });
+    }
+
 
     private void fetchByTitleOnlyFallback(String title, final String targetPath) {
         // Feature: Final fallback stage for extreme cases
@@ -574,13 +602,13 @@ public class Lyrics_Fragment extends Fragment {
                                 JSONObject item = array.getJSONObject(i);
                                 String plain = item.optString("plainLyrics", "");
                                 String synced = item.optString("syncedLyrics", "");
-                                
+
                                 if (!synced.isEmpty() && isSupportedLanguage(plain + synced)) {
                                     bestMatch = item;
                                     break;
                                 }
                             }
-                            
+
                             // If no synced, find first supported plain
                             if (bestMatch == null) {
                                 for (int i = 0; i < array.length(); i++) {
@@ -626,9 +654,8 @@ public class Lyrics_Fragment extends Fragment {
         }
 
         // Save to Database
-        try (FavoritesDatabase db = new FavoritesDatabase(getContext())) {
-            db.saveLyrics(targetPath, finalPlain, finalSynced);
-        }
+        FavoritesDatabase db = FavoritesDatabase.getInstance(getContext());
+        db.saveLyrics(targetPath, finalPlain, finalSynced);
 
         // Update UI if still active
         if (targetPath.equals(lastLoadedSongId) && getActivity() != null) {
@@ -645,41 +672,51 @@ public class Lyrics_Fragment extends Fragment {
         }
     }
 
-    /**
-     * Language Filter: Allows only Hindi (Devanagari), English, and Hinglish.
-     * Uses script detection to identify allowed characters.
-     */
     private boolean isSupportedLanguage(String text) {
         if (text == null || text.trim().isEmpty()) return false;
-        
-        // Remove symbols, digits, punctuation, and common lyrics junk
-        String clean = text.replaceAll("[\\s\\d\\p{P}\\p{S}♪\\[\\].:]", "");
-        
+
+        // Remove all common symbols, digits, punctuation, and lyrics-specific characters (like music notes)
+        // We only care about letters to determine the language.
+        String clean = text.replaceAll("[\\s\\d\\p{P}\\p{S}♪\\[\\]\\.:\\-—_|~]", "");
+
         if (clean.isEmpty()) return true; // Just music notes or numbers is okay
-        
-        int supported = 0;
+
+        int supportedCount = 0;
+        int unsupportedCount = 0;
+
         for (int i = 0; i < clean.length(); i++) {
-            char c = clean.charAt(i);
-            // English/Hinglish range (Basic Latin)
-            if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) {
-                supported++;
+            int codePoint = clean.codePointAt(i);
+            
+            // Script Detection:
+            // 1. Latin (English, Hinglish, Spanish, etc.)
+            // 2. Devanagari (Hindi, Marathi, etc.)
+            Character.UnicodeScript script = Character.UnicodeScript.of(codePoint);
+            
+            if (script == Character.UnicodeScript.LATIN || script == Character.UnicodeScript.DEVANAGARI) {
+                supportedCount++;
+            } else if (script != Character.UnicodeScript.COMMON && script != Character.UnicodeScript.INHERITED) {
+                // If it's a specific other script like Japanese, Chinese, Cyrillic, Arabic etc.
+                unsupportedCount++;
             }
-            // Hindi range (Devanagari)
-            else if (c >= 'ऀ' && c <= 'ॿ') {
-                supported++;
-            }
+            
+            if (Character.isSupplementaryCodePoint(codePoint)) i++;
         }
+
+        if (supportedCount == 0 && unsupportedCount > 0) return false;
+
+        // Strict Threshold: At least 90% of characters must be from supported scripts
+        // and we specifically block if there are more than 5 unsupported script characters
+        boolean isValid = (float) supportedCount / (supportedCount + unsupportedCount) > 0.90 && unsupportedCount < 10;
         
-        float ratio = (float) supported / clean.length();
-        // Threshold: 85% of actual characters must be in supported scripts
-        boolean isValid = ratio > 0.85;
-        if (!isValid) Log.d("LyricsFetch", "🚫 [REJECTED] Supported character ratio too low: " + ratio);
+        if (!isValid) {
+            Log.d("LyricsFetch", "🚫 [REJECTED] Language Check Failed. Supported: " + supportedCount + ", Unsupported: " + unsupportedCount);
+        }
         return isValid;
     }
 
     private void updateLyricsUI(String text) {
         if (getActivity() == null) return;
-        
+
         getActivity().runOnUiThread(() -> {
             if (isSyncedMode && text != null && text.contains("[")) {
                 // It's synced lyrics
@@ -694,7 +731,7 @@ public class Lyrics_Fragment extends Fragment {
                     return;
                 }
             }
-            
+
             // Fallback to plain text
             if (lyricsRecycler != null) lyricsRecycler.setVisibility(View.GONE);
             if (plainLyricsScroll != null) {
@@ -708,10 +745,10 @@ public class Lyrics_Fragment extends Fragment {
     private List<LyricLine> parseLRC(String lrc) {
         List<LyricLine> lines = new ArrayList<>();
         if (lrc == null) return lines;
-        
+
         String[] split = lrc.split("\n");
         Pattern pattern = Pattern.compile("\\[(\\d{2}):(\\d{2})\\.(\\d{2,3})](.*)");
-        
+
         for (String line : split) {
             Matcher matcher = pattern.matcher(line);
             if (matcher.find()) {
@@ -720,17 +757,17 @@ public class Lyrics_Fragment extends Fragment {
                     String secStr = matcher.group(2);
                     String msStrRaw = matcher.group(3);
                     String textStr = matcher.group(4);
-                    
+
                     if (minStr == null || secStr == null || msStrRaw == null || textStr == null) continue;
 
                     long min = Long.parseLong(minStr);
                     long sec = Long.parseLong(secStr);
                     long ms = Long.parseLong(msStrRaw);
                     if (msStrRaw.length() == 2) ms *= 10;
-                    
+
                     long currentLineStartTime = (min * 60 * 1000) + (sec * 1000) + ms;
                     String text = textStr.trim();
-                    
+
                     if (!text.isEmpty()) {
                         lines.add(new LyricLine(currentLineStartTime, text));
                     }
@@ -752,11 +789,11 @@ public class Lyrics_Fragment extends Fragment {
                 break;
             }
         }
-        
+
         if (index != -1 && index != lastActiveIndex) {
             lastActiveIndex = index;
             lyricsAdapter.setActiveIndex(index);
-            
+
             // Scroll to position with an offset to keep it near center
             LinearLayoutManager layoutManager = (LinearLayoutManager) lyricsRecycler.getLayoutManager();
             if (layoutManager != null) {
@@ -767,23 +804,23 @@ public class Lyrics_Fragment extends Fragment {
 
     private String cleanString(String input) {
         if (input == null || input.equalsIgnoreCase("<unknown>")) return "";
-        
+
         return input.replaceAll("(?i)\\[.*?]", "") // Remove everything in []
-                    .replaceAll("(?i)\\(.*?\\)", "") // Remove everything in ()
-                    .replaceAll("(?i)official audio|official video|full video|full audio|lyrical|audio|video|hd|4k|lyric video", "")
-                    .replaceAll("(?i)\\d{4}", "") // removes years
-                    .replaceAll("(?i)\\.mp3|\\.m4a|\\.wav|\\.flac", "")
-                    .replaceAll("(?i)\\.com|\\.to|\\.org|\\.net|\\.info|\\.me|\\.biz|\\.io", "") // Clean domains
-                    .replaceAll("(?i)PagalWorld\\.com|PagalWorld\\.pw|PagalWorld\\.com\\.se|PagalWorld|PaglaSongs|Pagalworld\\.org|PagalNew|KoshalWorld\\.Com", "")
-                    .replaceAll("^[-_ ]+|[-_ ]+$", "") // Remove leading/trailing hyphens, underscores, spaces
-                    .replaceAll("\\s+", " ") // Replace multiple spaces with one
-                    .trim();
+                .replaceAll("(?i)\\(.*?\\)", "") // Remove everything in ()
+                .replaceAll("(?i)official audio|official video|full video|full audio|lyrical|audio|video|hd|4k|lyric video", "")
+                .replaceAll("(?i)\\d{4}", "") // removes years
+                .replaceAll("(?i)\\.mp3|\\.m4a|\\.wav|\\.flac", "")
+                .replaceAll("(?i)\\.com|\\.to|\\.org|\\.net|\\.info|\\.me|\\.biz|\\.io", "") // Clean domains
+                .replaceAll("(?i)PagalWorld\\.com|PagalWorld\\.pw|PagalWorld\\.com\\.se|PagalWorld|PaglaSongs|Pagalworld\\.org|PagalNew|KoshalWorld\\.Com", "")
+                .replaceAll("^[-_ ]+|[-_ ]+$", "") // Remove leading/trailing hyphens, underscores, spaces
+                .replaceAll("\\s+", " ") // Replace multiple spaces with one
+                .trim();
     }
 
     public void toggleLyricsMode(boolean synced) {
         this.isSyncedMode = synced;
         if (getActivity() == null) return;
-        
+
         getActivity().runOnUiThread(() -> {
             if (synced) {
                 if (!currentSyncedLyrics.isEmpty() && !currentSyncedLyrics.equalsIgnoreCase("null")) {
@@ -834,15 +871,14 @@ public class Lyrics_Fragment extends Fragment {
     public void deleteLyricsFromDB() {
         musicList_Structure current = musicList_Recycler_Adapter.currentItem;
         if (current != null) {
-            try (FavoritesDatabase db = new FavoritesDatabase(getContext())) {
-                db.deleteLyrics(current.songPath);
-            }
+            FavoritesDatabase db = FavoritesDatabase.getInstance(getContext());
+            db.deleteLyrics(current.songPath);
 
             // Clear current state and UI
             currentPlainLyrics = "";
             currentSyncedLyrics = "";
             lyricLines.clear();
-            
+
             if (MainActivity.isOfflineMode) {
                 // 2. Offline Mode: Show manual instructions
                 updateLyricsUI(getString(R.string.add_lyrics_manually_online_instructions));
@@ -886,7 +922,7 @@ public class Lyrics_Fragment extends Fragment {
 
         // Apply Dynamic Colors to Buttons
         int dynamicColor = MainActivity.lastDynamicColor;
-        btnSave.setTextColor(dynamicColor); 
+        btnSave.setTextColor(dynamicColor);
         btnCancel.setTextColor(dynamicColor);
         // Note: User asked for textColor to be dynamic. 
         // If we want the background to be dynamic instead, we would use setBackgroundTintList.
@@ -909,19 +945,18 @@ public class Lyrics_Fragment extends Fragment {
 
             musicList_Structure current = musicList_Recycler_Adapter.currentItem;
             if (current != null && getContext() != null) {
-                try (FavoritesDatabase db = new FavoritesDatabase(getContext())) {
-                    // Smart Logic: If text contains typical LRC timestamps, treat as Synced
-                    if (text.contains("[") && text.contains("]")) {
-                        db.saveLyrics(current.songPath, "", text); // Save as Synced
-                        showToast(getString(R.string.synced_lyrics_added));
-                    } else {
-                        db.saveLyrics(current.songPath, text, ""); // Save as Plain
-                        showToast(getString(R.string.plain_lyrics_added));
-                    }
+                FavoritesDatabase db = FavoritesDatabase.getInstance(getContext());
+                // Smart Logic: If text contains typical LRC timestamps, treat as Synced
+                if (text.contains("[") && text.contains("]")) {
+                    db.saveLyrics(current.songPath, "", text); // Save as Synced
+                    showToast(getString(R.string.synced_lyrics_added));
+                } else {
+                    db.saveLyrics(current.songPath, text, ""); // Save as Plain
+                    showToast(getString(R.string.plain_lyrics_added));
                 }
 
                 // Force UI refresh by resetting lastLoadedId
-                lastLoadedSongId = ""; 
+                lastLoadedSongId = "";
                 updateLyricsSync();
                 bottomSheetDialog.dismiss();
             }
@@ -933,17 +968,16 @@ public class Lyrics_Fragment extends Fragment {
     public void openSyncedLyricsEditor() {
         musicList_Structure current = musicList_Recycler_Adapter.currentItem;
         if (current != null && getContext() != null) {
-            try (FavoritesDatabase db = new FavoritesDatabase(getContext())) {
-                String[] lyrics = db.getCachedLyrics(current.songPath);
+            FavoritesDatabase db = FavoritesDatabase.getInstance(getContext());
+            String[] lyrics = db.getCachedLyrics(current.songPath);
 
-                // Rule #3: If plain lyrics are missing, open Add Lyrics dialog first
-                if (lyrics == null || lyrics[0] == null || lyrics[0].isEmpty()) {
-                    showToast(getString(R.string.please_add_plain_lyrics_first));
-                    openAddLyricsDialog();
-                } else {
-                    android.content.Intent intent = new android.content.Intent(getContext(), SyncedLyricsEditorActivity.class);
-                    startActivity(intent);
-                }
+            // Rule #3: If plain lyrics are missing, open Add Lyrics dialog first
+            if (lyrics == null || lyrics[0] == null || lyrics[0].isEmpty()) {
+                showToast(getString(R.string.please_add_plain_lyrics_first));
+                openAddLyricsDialog();
+            } else {
+                android.content.Intent intent = new android.content.Intent(getContext(), SyncedLyricsEditorActivity.class);
+                startActivity(intent);
             }
         }
     }

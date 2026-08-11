@@ -12,7 +12,7 @@ import java.util.Objects;
 public class FavoritesDatabase extends SQLiteOpenHelper {
 
     private static final String DATABASE_NAME = "favorites.db";
-    private static final int DATABASE_VERSION = 3; // Incremented version for lyrics table
+    private static final int DATABASE_VERSION = 4; // Incremented for songs cache table
     private static final String TABLE_FAVORITES = "favorites";
     private static final String COLUMN_ID = "id";
     private static final String COLUMN_PATH = "path";
@@ -20,12 +20,26 @@ public class FavoritesDatabase extends SQLiteOpenHelper {
     private static final String COLUMN_ARTIST = "artist";
     private static final String COLUMN_ALBUM_ID = "album_id";
 
+    // Songs Cache Table
+    private static final String TABLE_SONGS_CACHE = "songs_cache";
+    private static final String COLUMN_CLEAN_ARTIST = "clean_artist";
+    private static final String COLUMN_ALPHABET_HEADER = "alphabet_header";
+    private static final String COLUMN_SHOW_HEADER = "show_header";
+
     // Lyrics Cache Table
     private static final String TABLE_LYRICS = "lyrics_cache";
     private static final String COLUMN_LYRICS_PLAIN = "plain_lyrics";
     private static final String COLUMN_LYRICS_SYNCED = "synced_lyrics";
 
     public static ArrayList<musicList_Structure> favoriteList = new ArrayList<>();
+    private static FavoritesDatabase instance;
+
+    public static synchronized FavoritesDatabase getInstance(Context context) {
+        if (instance == null) {
+            instance = new FavoritesDatabase(context.getApplicationContext());
+        }
+        return instance;
+    }
 
     public FavoritesDatabase(Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
@@ -50,6 +64,17 @@ public class FavoritesDatabase extends SQLiteOpenHelper {
                 COLUMN_LYRICS_PLAIN + " TEXT, " +
                 COLUMN_LYRICS_SYNCED + " TEXT)";
         db.execSQL(createLyricsTable);
+
+        String createSongsCacheTable = "CREATE TABLE " + TABLE_SONGS_CACHE + " (" +
+                COLUMN_ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                COLUMN_PATH + " TEXT UNIQUE, " +
+                COLUMN_TITLE + " TEXT, " +
+                COLUMN_ARTIST + " TEXT, " +
+                COLUMN_CLEAN_ARTIST + " TEXT, " +
+                COLUMN_ALBUM_ID + " INTEGER, " +
+                COLUMN_ALPHABET_HEADER + " TEXT, " +
+                COLUMN_SHOW_HEADER + " INTEGER)";
+        db.execSQL(createSongsCacheTable);
     }
 
     @Override
@@ -61,6 +86,18 @@ public class FavoritesDatabase extends SQLiteOpenHelper {
                     COLUMN_LYRICS_PLAIN + " TEXT, " +
                     COLUMN_LYRICS_SYNCED + " TEXT)";
             db.execSQL(createLyricsTable);
+        }
+        if (oldVersion < 4) {
+            String createSongsCacheTable = "CREATE TABLE " + TABLE_SONGS_CACHE + " (" +
+                    COLUMN_ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                    COLUMN_PATH + " TEXT UNIQUE, " +
+                    COLUMN_TITLE + " TEXT, " +
+                    COLUMN_ARTIST + " TEXT, " +
+                    COLUMN_CLEAN_ARTIST + " TEXT, " +
+                    COLUMN_ALBUM_ID + " INTEGER, " +
+                    COLUMN_ALPHABET_HEADER + " TEXT, " +
+                    COLUMN_SHOW_HEADER + " INTEGER)";
+            db.execSQL(createSongsCacheTable);
         }
     }
 
@@ -144,6 +181,53 @@ public class FavoritesDatabase extends SQLiteOpenHelper {
         }
 
         favoriteList.removeIf(song -> Objects.equals(song.songPath, path));
+    }
+
+    public void cacheAllSongs(ArrayList<musicList_Structure> songs) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        try {
+            db.beginTransaction();
+            db.delete(TABLE_SONGS_CACHE, null, null); // Clear old cache
+            for (musicList_Structure song : songs) {
+                ContentValues values = new ContentValues();
+                values.put(COLUMN_PATH, song.songPath);
+                values.put(COLUMN_TITLE, song.songTitle);
+                values.put(COLUMN_ARTIST, song.artistName);
+                values.put(COLUMN_CLEAN_ARTIST, song.getCleanArtist());
+                values.put(COLUMN_ALBUM_ID, song.albumId);
+                values.put(COLUMN_ALPHABET_HEADER, song.alphabetHeader);
+                values.put(COLUMN_SHOW_HEADER, song.showAlphabetHeader ? 1 : 0);
+                db.insert(TABLE_SONGS_CACHE, null, values);
+            }
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
+    }
+
+    public ArrayList<musicList_Structure> getCachedSongs() {
+        ArrayList<musicList_Structure> list = new ArrayList<>();
+        try (SQLiteDatabase db = this.getReadableDatabase();
+             Cursor cursor = db.query(TABLE_SONGS_CACHE, null, null, null, null, null, COLUMN_ID + " ASC")) {
+            if (cursor.moveToFirst()) {
+                do {
+                    String title = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_TITLE));
+                    String path = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_PATH));
+                    String artist = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_ARTIST));
+                    String cleanArtist = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_CLEAN_ARTIST));
+                    long albumId = cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_ALBUM_ID));
+                    String alphabet = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_ALPHABET_HEADER));
+                    boolean showHeader = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_SHOW_HEADER)) == 1;
+
+                    musicList_Structure song = new musicList_Structure(title, path, artist, albumId);
+                    song.setCachedCleanArtist(cleanArtist);
+                    song.alphabetHeader = alphabet;
+                    song.showAlphabetHeader = showHeader;
+                    list.add(song);
+                } while (cursor.moveToNext());
+            }
+        }
+        return list;
     }
 
     public void deleteLyrics(String path) {
