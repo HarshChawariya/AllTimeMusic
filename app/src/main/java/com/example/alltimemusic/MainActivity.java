@@ -374,6 +374,12 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onResourceReady(@NonNull android.graphics.drawable.Drawable resource, @androidx.annotation.Nullable com.bumptech.glide.request.transition.Transition<? super android.graphics.drawable.Drawable> transition) {
                 miniProfile.setImageDrawable(resource);
+                // Dynamically set to Match Parent for real images to fill the mini player container (50dp)
+                LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                );
+                miniProfile.setLayoutParams(params);
                 if (resource instanceof android.graphics.drawable.BitmapDrawable) {
                     android.graphics.Bitmap bitmap = ((android.graphics.drawable.BitmapDrawable) resource).getBitmap();
                     if (bitmap != null) {
