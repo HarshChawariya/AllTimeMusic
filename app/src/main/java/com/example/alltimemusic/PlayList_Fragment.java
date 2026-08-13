@@ -29,6 +29,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.bumptech.glide.Glide;
+import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.bumptech.glide.load.resource.bitmap.CenterCrop;
 import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions;
 import com.google.android.material.imageview.ShapeableImageView;
@@ -46,7 +47,7 @@ public class PlayList_Fragment extends Fragment {
     private TextView songTitleTextView, artist_name, textSeek1, textSeek2, syncedLyricsTxt;
     private SeekBar seekBar;
     private ImageView pause, next, previous, loopButton, favButton;
-    private static com.google.android.material.imageview.ShapeableImageView profile;
+    private com.google.android.material.imageview.ShapeableImageView profile;
     private LinearLayout rootLayout;
     private ArrayList<musicList_Structure> songs;
     public static ArrayList<musicList_Structure> arrPlayNext = new ArrayList<>();
@@ -90,6 +91,13 @@ public class PlayList_Fragment extends Fragment {
             }
         }
     };
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        // ALWAYS-SYNC: Force UI update every time the fragment becomes visible to keep current song data accurate
+        syncUIWithCurrentSong();
+    }
 
     @Override
     public void onDestroy() {
@@ -212,13 +220,22 @@ public class PlayList_Fragment extends Fragment {
     }
 
     public void syncUIWithCurrentSong() {
+        // GLOBAL PRIORITY SYNC: Always refresh local data from adapter before updating UI
+        arrPlayList = musicList_Recycler_Adapter.fullMusicList;
+        this.position = musicList_Recycler_Adapter.currentPosition;
+
         if (mediaPlayer != null && arrPlayList != null && !arrPlayList.isEmpty()) {
             // Safety Check: Ensure position is valid for the current list size
             if (position < 0 || position >= arrPlayList.size()) {
                 position = 0; // Default to first if out of bounds
             }
             
-            musicList_Structure currentSong = arrPlayList.get(position);
+            musicList_Structure currentSong = musicList_Recycler_Adapter.currentItem;
+            if (currentSong == null) {
+                currentSong = arrPlayList.get(position);
+            }
+
+            // RESET UI IMMEDIATELY to prevent "ghosting" of old metadata
             if (songTitleTextView != null) songTitleTextView.setText(currentSong.songTitle);
             if (artist_name != null) artist_name.setText(currentSong.getCleanArtist());
 
@@ -258,8 +275,23 @@ public class PlayList_Fragment extends Fragment {
     private void updateProfileImage(ShapeableImageView profile_imageView, musicList_Structure song) {
         if (profile_imageView == null || song == null) return;
 
-        android.net.Uri sArtworkUri = android.net.Uri.parse("content://media/external/audio/albumart");
-        android.net.Uri uri = android.content.ContentUris.withAppendedId(sArtworkUri, song.albumId);
+        // BUG FIX: Explicitly clear Glide and the ImageView FIRST to ensure old album art is gone
+        Glide.with(this).clear(profile_imageView);
+        profile_imageView.setImageResource(R.drawable.profile);
+        
+        // Restore LayoutParams for consistent scaling - Default to 280dp as requested
+        int defaultSizeInPx = (int) (280 * getResources().getDisplayMetrics().density);
+        ViewGroup.LayoutParams initialParams = profile_imageView.getLayoutParams();
+        initialParams.width = defaultSizeInPx;
+        initialParams.height = defaultSizeInPx;
+        profile_imageView.setLayoutParams(initialParams);
+
+        if (song.albumId <= 0) {
+            return;
+        }
+
+        Uri sArtworkUri = Uri.parse("content://media/external/audio/albumart");
+        Uri uri = ContentUris.withAppendedId(sArtworkUri, song.albumId);
 
         // Use Glide with Palette for dynamic background color extraction
         Glide.with(this)
@@ -267,7 +299,10 @@ public class PlayList_Fragment extends Fragment {
                 .load(uri)
                 .placeholder(R.drawable.profile)
                 .error(R.drawable.profile)
+                .fallback(R.drawable.profile)
                 .transform(new CenterCrop())
+                .diskCacheStrategy(DiskCacheStrategy.ALL)
+                .dontAnimate()
                 .into(new com.bumptech.glide.request.target.CustomTarget<Bitmap>() {
                     @Override
                     public void onResourceReady(@NonNull Bitmap resource, @Nullable com.bumptech.glide.request.transition.Transition<? super Bitmap> transition) {
@@ -281,7 +316,7 @@ public class PlayList_Fragment extends Fragment {
 
                     @Override
                     public void onLoadCleared(@Nullable android.graphics.drawable.Drawable placeholder) {
-                        // Not used
+                        setDefaultProfileImage(profile_imageView);
                     }
 
                     @Override

@@ -7,7 +7,6 @@ import android.Manifest;
 import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.Context;
-import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Color;
@@ -360,14 +359,24 @@ public class MainActivity extends AppCompatActivity {
                 else miniProgressBar.setProgress(PlayList_Fragment.mediaPlayer.getCurrentPosition());
             }
             for (Fragment f : getSupportFragmentManager().getFragments()) {
-                if (f instanceof Lyrics_Fragment) { ((Lyrics_Fragment) f).updateLyricsSync(); ((Lyrics_Fragment) f).updateMiniPauseIcon(); }
-                else if (f instanceof PlayList_Fragment) ((PlayList_Fragment) f).updatePauseIcon();
+                if (f instanceof Lyrics_Fragment) {
+                    ((Lyrics_Fragment) f).updateLyricsSync();
+                    ((Lyrics_Fragment) f).updateMiniPauseIcon();
+                } else if (f instanceof PlayList_Fragment) {
+                    ((PlayList_Fragment) f).updatePauseIcon();
+                    ((PlayList_Fragment) f).syncUIWithCurrentSong(); // Added sync call to fix metadata bug
+                }
             }
         }
     }
 
     private void updateMiniProfileImage(musicList_Structure song) {
         if (miniProfile == null || song == null) return;
+
+        // BUG FIX: Explicitly clear the ImageView to avoid recycling artifacts
+        Glide.with(this).clear(miniProfile);
+        miniProfile.setImageResource(R.drawable.profile);
+
         Uri sArtworkUri = Uri.parse("content://media/external/audio/albumart");
         Uri uri = ContentUris.withAppendedId(sArtworkUri, song.albumId);
         Glide.with(this).load(uri).placeholder(R.drawable.profile).error(R.drawable.profile).transition(DrawableTransitionOptions.withCrossFade()).transform(new CenterCrop()).into(new com.bumptech.glide.request.target.CustomTarget<android.graphics.drawable.Drawable>() {
