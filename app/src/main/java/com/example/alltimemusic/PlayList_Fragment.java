@@ -131,7 +131,7 @@ public class PlayList_Fragment extends Fragment {
             currentSong = arrPlayList.get(position);
         }
 
-        try (FavoritesDatabase db = new FavoritesDatabase(getContext())) {
+        FavoritesDatabase db = FavoritesDatabase.getInstance(getContext());
             if (!db.isFavorite(currentSong.songPath)) {
                 db.addFavorite(currentSong);
                 currentSong.isFavourite = true;
@@ -143,7 +143,7 @@ public class PlayList_Fragment extends Fragment {
                 favButton.setImageResource(R.drawable.boder_of_heart);
                 Toast.makeText(getActivity(), getString(R.string.removed_from_favorite), Toast.LENGTH_SHORT).show();
             }
-        }
+
 
         // IMPORTANT: Immediate Position Sync to prevent crash on re-addition/removal
         if (arrPlayList != null) {
@@ -242,9 +242,8 @@ public class PlayList_Fragment extends Fragment {
             updateProfileImage(profile, currentSong);
             loadSyncedLyrics(currentSong.songPath);
 
-            try (FavoritesDatabase db = new FavoritesDatabase(getContext())) {
+            FavoritesDatabase db = FavoritesDatabase.getInstance(getContext());
                 currentSong.isFavourite = db.isFavorite(currentSong.songPath);
-            }
 
             if (favButton != null) favButton.setImageResource(currentSong.isFavourite ? R.drawable.fill_heart : R.drawable.boder_of_heart);
 
@@ -274,17 +273,17 @@ public class PlayList_Fragment extends Fragment {
 
     private void updateProfileImage(ShapeableImageView profile_imageView, musicList_Structure song) {
         if (profile_imageView == null || song == null) return;
-
-        // BUG FIX: Explicitly clear Glide and the ImageView FIRST to ensure old album art is gone
-        Glide.with(this).clear(profile_imageView);
-        profile_imageView.setImageResource(R.drawable.profile);
-        
-        // Restore LayoutParams for consistent scaling - Default to 280dp as requested
-        int defaultSizeInPx = (int) (280 * getResources().getDisplayMetrics().density);
-        ViewGroup.LayoutParams initialParams = profile_imageView.getLayoutParams();
-        initialParams.width = defaultSizeInPx;
-        initialParams.height = defaultSizeInPx;
-        profile_imageView.setLayoutParams(initialParams);
+        /*
+         *BUG FIX: Explicitly clear Glide and the ImageView FIRST to ensure old album art is gone
+         *Glide.with(this).clear(profile_imageView);
+         *profile_imageView.setImageResource(R.drawable.profile);
+         *Restore LayoutParams for consistent scaling - Default to 280dp as requested
+         *int defaultSizeInPx = (int) (280 * getResources().getDisplayMetrics().density);
+         *ViewGroup.LayoutParams initialParams = profile_imageView.getLayoutParams();
+         *initialParams.width = defaultSizeInPx;
+         *initialParams.height = defaultSizeInPx;
+         *profile_imageView.setLayoutParams(initialParams);
+         */
 
         if (song.albumId <= 0) {
             return;
@@ -422,9 +421,9 @@ public class PlayList_Fragment extends Fragment {
                 updateProfileImage(profile, currentSong);
                 loadSyncedLyrics(currentSong.songPath);
 
-                try (FavoritesDatabase db = new FavoritesDatabase(getContext())) {
+                FavoritesDatabase db = FavoritesDatabase.getInstance(getContext());
                     currentSong.isFavourite = db.isFavorite(currentSong.songPath);
-                }
+
                 if (favButton != null) favButton.setImageResource(currentSong.isFavourite ? R.drawable.fill_heart : R.drawable.boder_of_heart);
 
                 if (seekBar != null) {
@@ -489,7 +488,7 @@ public class PlayList_Fragment extends Fragment {
         currentLyricIndex = -1;
 
         if (getContext() == null) return;
-        try (FavoritesDatabase db = new FavoritesDatabase(getContext())) {
+        FavoritesDatabase db = FavoritesDatabase.getInstance(getContext());
             String[] cached = db.getCachedLyrics(path);
 
             if (cached != null && cached[1] != null && !cached[1].isEmpty() && !cached[1].equalsIgnoreCase("null")) {
@@ -500,7 +499,7 @@ public class PlayList_Fragment extends Fragment {
                     }
                 }
             }
-        }
+
     }
 
     private void updateSyncedLyrics(int currentMs) {

@@ -155,7 +155,7 @@ public class musicList_Recycler_Adapter extends RecyclerView.Adapter<musicList_R
                     }
                 } else if (title.equals(context.getString(R.string.added_to_favorite)) || title.equals(context.getString(R.string.removed_from_favorite))) {
                     // Toggle favorite logic
-                    try (FavoritesDatabase db = new FavoritesDatabase(context)) {
+                    FavoritesDatabase db = FavoritesDatabase.getInstance(context);
                         if (item.isFavourite) {
                             db.removeFavorite(item.songPath);
                             item.isFavourite = false;
@@ -165,7 +165,7 @@ public class musicList_Recycler_Adapter extends RecyclerView.Adapter<musicList_R
                             item.isFavourite = true;
                             Toast.makeText(context, context.getString(R.string.added_to_favorite), Toast.LENGTH_SHORT).show();
                         }
-                    }
+
                     
                     // Update visual heart indicator
                     notifyItemChanged(holder.getBindingAdapterPosition());

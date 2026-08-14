@@ -375,7 +375,7 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
     }
 
     private void loadLyricsWithPriority() {
-        try (FavoritesDatabase db = new FavoritesDatabase(this)) {
+        FavoritesDatabase db = FavoritesDatabase.getInstance(this);
             String[] lyrics = db.getCachedLyrics(currentSong.songPath);
             lyricLines.clear();
 
@@ -393,7 +393,7 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
                     parseLyricsToLines(plain);
                 }
             }
-        }
+
     }
 
     private void parseLyricsToLines(String raw) {
@@ -438,7 +438,7 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
         popup.addMenuItem(getString(R.string.edit_synced_lyrics));
         
         popup.setOnItemClickListener(title -> {
-            try (FavoritesDatabase db = new FavoritesDatabase(this)) {
+            FavoritesDatabase db = FavoritesDatabase.getInstance(this);
                 String[] lyrics = db.getCachedLyrics(currentSong.songPath);
 
                 if (title.equals(getString(R.string.edit_plain_lyrics))) {
@@ -448,13 +448,13 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
                     isEditingSynced = true;
                     if (lyrics != null) parseLyricsToLines(lyrics[1]);
                 }
-            }
+
         });
         popup.show(view);
     }
 
     private void loadPlainLyrics() {
-        try (FavoritesDatabase db = new FavoritesDatabase(this)) {
+        FavoritesDatabase db = FavoritesDatabase.getInstance(this);
             String[] lyrics = db.getCachedLyrics(currentSong.songPath);
             if (lyrics != null && lyrics[0] != null && !lyrics[0].isEmpty()) {
                 String plain = lyrics[0];
@@ -466,7 +466,7 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
                     }
                 }
             }
-        }
+
     }
 
     private void selectLine(int index) {
@@ -673,11 +673,11 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
             syncedBuilder.append(timestamp).append(line.getText()).append("\n");
         }
 
-        try (FavoritesDatabase db = new FavoritesDatabase(this)) {
+        FavoritesDatabase db = FavoritesDatabase.getInstance(this);
             db.saveLyrics(currentSong.songPath, null, syncedBuilder.toString());
             if (showToast)
                 Toast.makeText(this, getString(R.string.lyrics_synced_saved), Toast.LENGTH_SHORT).show();
-        }
+
     }
 
     @Override
