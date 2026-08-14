@@ -358,14 +358,24 @@ public class MainActivity extends AppCompatActivity {
                 if (isPlaying) updateMiniPlayerProgress();
                 else miniProgressBar.setProgress(PlayList_Fragment.mediaPlayer.getCurrentPosition());
             }
-            for (Fragment f : getSupportFragmentManager().getFragments()) {
-                if (f instanceof Lyrics_Fragment) {
-                    ((Lyrics_Fragment) f).updateLyricsSync();
-                    ((Lyrics_Fragment) f).updateMiniPauseIcon();
-                } else if (f instanceof PlayList_Fragment) {
-                    ((PlayList_Fragment) f).updatePauseIcon();
-                    ((PlayList_Fragment) f).syncUIWithCurrentSong(); // Added sync call to fix metadata bug
-                }
+
+            // Sync all active fragments with new metadata and playback state
+            notifyFragments();
+        }
+    }
+
+    /**
+     * Iterates through all active fragments and triggers their respective sync methods.
+     * This ensures that both Lyrics and Playlist fragments reflect the latest song data.
+     */
+    private void notifyFragments() {
+        for (Fragment f : getSupportFragmentManager().getFragments()) {
+            if (f instanceof Lyrics_Fragment) {
+                ((Lyrics_Fragment) f).updateLyricsSync();
+                ((Lyrics_Fragment) f).updateMiniPauseIcon();
+            } else if (f instanceof PlayList_Fragment) {
+                ((PlayList_Fragment) f).updatePauseIcon();
+                ((PlayList_Fragment) f).syncUIWithCurrentSong();
             }
         }
     }

@@ -162,14 +162,16 @@ public class PlayList_Fragment extends Fragment {
                 musicList_Recycler_Adapter.currentPosition = position;
             }
         }
-
-        if (getActivity() instanceof MainActivity) {
-            ((MainActivity) getActivity()).updateMiniPlayer();
-            ((MainActivity) getActivity()).updateRecyclerViewSelection();
-        } else if (getActivity() instanceof LikedSongsActivity) {
-            ((LikedSongsActivity) getActivity()).updateMiniPlayer();
-            ((LikedSongsActivity) getActivity()).updateRecyclerViewSelection();
-        }
+        notifyActivity();
+       /*
+        *if (getActivity() instanceof MainActivity) {
+        *    ((MainActivity) getActivity()).updateMiniPlayer();
+        *    ((MainActivity) getActivity()).updateRecyclerViewSelection();
+        *} else if (getActivity() instanceof LikedSongsActivity) {
+        *    ((LikedSongsActivity) getActivity()).updateMiniPlayer();
+        *    ((LikedSongsActivity) getActivity()).updateRecyclerViewSelection();
+        *}
+        */
     }
 
     public void applyLoopMode(boolean showToast) {
@@ -220,8 +222,8 @@ public class PlayList_Fragment extends Fragment {
     }
 
     public void syncUIWithCurrentSong() {
-        // GLOBAL PRIORITY SYNC: Always refresh local data from adapter before updating UI
-        arrPlayList = musicList_Recycler_Adapter.fullMusicList;
+        // GLOBAL SYNC: Always refresh the playlist and position from the adapter before updating UI
+        PlayList_Fragment.arrPlayList = musicList_Recycler_Adapter.fullMusicList;
         this.position = musicList_Recycler_Adapter.currentPosition;
 
         if (mediaPlayer != null && arrPlayList != null && !arrPlayList.isEmpty()) {
@@ -285,7 +287,12 @@ public class PlayList_Fragment extends Fragment {
          *profile_imageView.setLayoutParams(initialParams);
          */
 
+        // SYNC FIX: Explicitly clear Glide to prevent "ghosting" of the previous song's art
+        Glide.with(this).clear(profile_imageView);
+
         if (song.albumId <= 0) {
+            // If no album art is available, immediately set the default placeholder
+            setDefaultProfileImage(profile_imageView);
             return;
         }
 
@@ -335,6 +342,10 @@ public class PlayList_Fragment extends Fragment {
         profile_imageView.setLayoutParams(params);
     }
 
+    /**
+     * Notifies the parent Activity (MainActivity or LikedSongsActivity) to update its UI components.
+     * Ensures MiniPlayer and RecyclerView selection are always in sync with the current song.
+     */
     private void notifyActivity() {
         if (getActivity() instanceof MainActivity) {
             ((MainActivity) getActivity()).updateMiniPlayer();
