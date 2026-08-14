@@ -60,6 +60,7 @@ public class PlayList_Fragment extends Fragment {
     private LinearLayout logo;
     private int position;
     public static int playingPosition = -1;
+    public static String playingSongPath = ""; // Track song by path to support different list contexts
     private int currentLoopMode = 0; // 0: No Loop, 1: Single Loop, 2: Playlist Loop, 3: Shuffle
     private static final String PREFS_NAME = "MusicPrefs";
     private static final String KEY_LOOP_MODE = "currentLoopMode";
@@ -114,10 +115,15 @@ public class PlayList_Fragment extends Fragment {
         songs = musicList_Recycler_Adapter.fullMusicList;
         arrPlayList = songs;
         position = musicList_Recycler_Adapter.currentPosition;
+//        if(playingPosition != position || mediaPlayer == null)
+        musicList_Structure currentSong = musicList_Recycler_Adapter.currentItem;
+        String newPath = (currentSong != null) ? currentSong.songPath : "";
 
-        if (playingPosition != position || mediaPlayer == null) {
+        // SYNC FIX: Compare by path instead of position to prevent restart when switching activities
+        if (mediaPlayer == null || !newPath.equals(playingSongPath)) {
             playSong();
         } else {
+            // Same song is already playing, just sync the UI elements
             syncUIWithCurrentSong();
         }
     }
@@ -405,6 +411,7 @@ public class PlayList_Fragment extends Fragment {
             mediaPlayer = MediaPlayer.create(getContext(), Uri.parse(currentSong.songPath));
             if (mediaPlayer != null) {
                 playingPosition = position;
+                playingSongPath = currentSong.songPath; // Update currently playing path
                 mediaPlayer.start();
 
                 mediaPlayer.setOnCompletionListener(mp -> {
