@@ -4,13 +4,18 @@ import static android.view.View.GONE;
 import static android.view.View.VISIBLE;
 
 import android.Manifest;
+import android.animation.ArgbEvaluator;
+import android.animation.ValueAnimator;
 import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
+import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
 import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
@@ -33,7 +38,9 @@ import android.widget.Toast;
 
 import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.Toolbar;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
@@ -45,9 +52,11 @@ import androidx.viewpager2.widget.ViewPager2;
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.load.resource.bitmap.CenterCrop;
 import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions;
+import com.bumptech.glide.request.target.CustomTarget;
+import com.bumptech.glide.request.transition.Transition;
 
 import java.util.ArrayList;
-import java.util.Objects;
+import java.util.HashSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -92,7 +101,7 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        androidx.appcompat.widget.Toolbar toolbar = findViewById(R.id.toolbar);
+        Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
 
         alphabet = findViewById(R.id.alphabet);
@@ -182,7 +191,11 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void handleOnBackPressed() {
                 if (musicList_LinLayOut.getVisibility() == VISIBLE) handleBackAction();
-                else { setEnabled(false); getOnBackPressedDispatcher().onBackPressed(); setEnabled(true); }
+                else {
+                    setEnabled(false);
+                    getOnBackPressedDispatcher().onBackPressed();
+                    setEnabled(true);
+                }
             }
         });
 
@@ -234,7 +247,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void updateUI(ArrayList<musicList_Structure> list) {
-        java.util.HashSet<String> favPaths = new java.util.HashSet<>();
+        HashSet<String> favPaths = new HashSet<>();
         for (musicList_Structure fav : FavoritesDatabase.favoriteList) favPaths.add(fav.songPath);
         for (musicList_Structure song : list) song.isFavourite = favPaths.contains(song.songPath);
 
@@ -302,7 +315,7 @@ public class MainActivity extends AppCompatActivity {
         super.onResume();
         if (musicList_LinLayOut.getVisibility() == GONE) getWindow().setStatusBarColor(Color.parseColor("#9D201A"));
         if (!musicList.isEmpty()) {
-            java.util.HashSet<String> favPaths = new java.util.HashSet<>();
+            HashSet<String> favPaths = new HashSet<>();
             for (musicList_Structure fav : FavoritesDatabase.favoriteList) favPaths.add(fav.songPath);
             for (musicList_Structure song : musicList) song.isFavourite = favPaths.contains(song.songPath);
             if (recyclerView.getAdapter() instanceof musicList_Recycler_Adapter) {
@@ -310,7 +323,11 @@ public class MainActivity extends AppCompatActivity {
             }
         }
         updateMiniPlayer();
-        if (isReturningFromLiked) { isReturningFromLiked = false; openPlayerLayout(); }
+
+        if (isReturningFromLiked) {
+            isReturningFromLiked = false;
+            openPlayerLayout();
+        }
     }
 
     private void handleBackAction() {
@@ -322,8 +339,8 @@ public class MainActivity extends AppCompatActivity {
 
     private void animateStatusBarColor(int toColor) {
         int fromColor = getWindow().getStatusBarColor();
-        android.animation.ValueAnimator colorAnimation = android.animation.ValueAnimator.ofObject(
-                new android.animation.ArgbEvaluator(), fromColor, toColor);
+        ValueAnimator colorAnimation = ValueAnimator.ofObject(
+                new ArgbEvaluator(), fromColor, toColor);
         colorAnimation.setDuration(300);
         colorAnimation.addUpdateListener(animator -> getWindow().setStatusBarColor((int) animator.getAnimatedValue()));
         colorAnimation.start();
@@ -389,9 +406,15 @@ public class MainActivity extends AppCompatActivity {
 
         Uri sArtworkUri = Uri.parse("content://media/external/audio/albumart");
         Uri uri = ContentUris.withAppendedId(sArtworkUri, song.albumId);
-        Glide.with(this).load(uri).placeholder(R.drawable.profile).error(R.drawable.profile).transition(DrawableTransitionOptions.withCrossFade()).transform(new CenterCrop()).into(new com.bumptech.glide.request.target.CustomTarget<android.graphics.drawable.Drawable>() {
+        Glide.with(this)
+                .load(uri)
+                .placeholder(R.drawable.profile)
+                .error(R.drawable.profile)
+                .transition(DrawableTransitionOptions.withCrossFade())
+                .transform(new CenterCrop())
+                .into(new CustomTarget<Drawable>() {
             @Override
-            public void onResourceReady(@NonNull android.graphics.drawable.Drawable resource, @androidx.annotation.Nullable com.bumptech.glide.request.transition.Transition<? super android.graphics.drawable.Drawable> transition) {
+            public void onResourceReady(@NonNull Drawable resource, @Nullable Transition<? super Drawable> transition) {
                 miniProfile.setImageDrawable(resource);
                 // Dynamically set to Match Parent for real images to fill the mini player container (50dp)
                 LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
@@ -399,8 +422,8 @@ public class MainActivity extends AppCompatActivity {
                         ViewGroup.LayoutParams.MATCH_PARENT
                 );
                 miniProfile.setLayoutParams(params);
-                if (resource instanceof android.graphics.drawable.BitmapDrawable) {
-                    android.graphics.Bitmap bitmap = ((android.graphics.drawable.BitmapDrawable) resource).getBitmap();
+                if (resource instanceof BitmapDrawable) {
+                    Bitmap bitmap = ((BitmapDrawable) resource).getBitmap();
                     if (bitmap != null) {
                         Palette.from(bitmap).setRegion(bitmap.getWidth()/4, bitmap.getHeight()/4, (3*bitmap.getWidth())/4, (3*bitmap.getHeight())/4).generate(palette -> {
                             if (palette != null) applyDynamicColorsToUI(extractBestColor(palette));
@@ -408,8 +431,15 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
             }
-            @Override public void onLoadCleared(@androidx.annotation.Nullable android.graphics.drawable.Drawable placeholder) { miniProfile.setImageDrawable(placeholder); }
-            @Override public void onLoadFailed(@androidx.annotation.Nullable android.graphics.drawable.Drawable errorDrawable) { miniProfile.setImageDrawable(errorDrawable); setDefaultMiniProfile(); applyDynamicColorsToUI(Color.parseColor("#9D201A")); }
+            @Override public void onLoadCleared(@Nullable Drawable placeholder) {
+                miniProfile.setImageDrawable(placeholder);
+            }
+
+            @Override public void onLoadFailed(@Nullable Drawable errorDrawable) {
+                miniProfile.setImageDrawable(errorDrawable);
+                setDefaultMiniProfile();
+                applyDynamicColorsToUI(Color.parseColor("#9D201A"));
+            }
         });
     }
 
@@ -455,14 +485,19 @@ public class MainActivity extends AppCompatActivity {
     private void setupNetworkMonitoring() {
         connectivityManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
         networkCallback = new ConnectivityManager.NetworkCallback() {
-            @Override public void onAvailable(@NonNull Network network) { runOnUiThread(() -> { if (isOfflineMode) { isOfflineMode = false; notifyLyricsOfNetworkChange(); } }); }
+            @Override public void onAvailable(@NonNull Network network) {
+                runOnUiThread(() -> { if (isOfflineMode) { isOfflineMode = false; notifyLyricsOfNetworkChange(); } });
+            }
+
             @Override public void onLost(@NonNull Network network) { runOnUiThread(() -> isOfflineMode = true); }
         };
         connectivityManager.registerNetworkCallback(new NetworkRequest.Builder().addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET).build(), networkCallback);
     }
 
     private void notifyLyricsOfNetworkChange() {
-        for (Fragment f : getSupportFragmentManager().getFragments()) { if (f instanceof Lyrics_Fragment) ((Lyrics_Fragment) f).retryFetchingIfEmpty(); }
+        for (Fragment f : getSupportFragmentManager().getFragments()) {
+            if (f instanceof Lyrics_Fragment) ((Lyrics_Fragment) f).retryFetchingIfEmpty();
+        }
     }
     
     public void updateMiniPlayerProgress() {
@@ -512,18 +547,37 @@ public class MainActivity extends AppCompatActivity {
         if (viewPager.getAdapter() == null) {
             ViewPager2Adapter adapter = new ViewPager2Adapter(this);
             viewPager.setAdapter(adapter);
+
             tabItem1.setOnClickListener(v -> viewPager.setCurrentItem(0));
             tabItem2.setOnClickListener(v -> viewPager.setCurrentItem(1));
-            tabItem1.post(() -> { indicator.getLayoutParams().width = tabItem1.getWidth(); indicator.requestLayout(); });
+
+            tabItem1.post(() -> {
+                indicator.getLayoutParams().width = tabItem1.getWidth();
+                indicator.requestLayout();
+            });
+
             viewPager.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
-                @Override public void onPageScrolled(int position, float positionOffset, int positionOffsetPixels) { indicator.setTranslationX((position + positionOffset) * tabItem1.getWidth()); }
+                @Override public void onPageScrolled(int position, float positionOffset, int positionOffsetPixels) {
+
+                    indicator.setTranslationX((position + positionOffset) * tabItem1.getWidth());
+                }
                 @Override public void onPageSelected(int position) { updateTabStyles(position + 1); }
             });
         }
     }
 
     private void updateTabStyles(int tabNumber) {
-        if (tabNumber == 1) { tabItem1.setTypeface(null, Typeface.BOLD); tabItem1.setTextColor(Color.WHITE); tabItem2.setTextColor(Color.parseColor("#99FFFFFF")); tabItem2.setTypeface(null, Typeface.NORMAL); }
-        else { tabItem2.setTypeface(null, Typeface.BOLD); tabItem2.setTextColor(Color.WHITE); tabItem1.setTextColor(Color.parseColor("#99FFFFFF")); tabItem1.setTypeface(null, Typeface.NORMAL); }
+        if (tabNumber == 1) {
+            tabItem1.setTypeface(null, Typeface.BOLD);
+            tabItem1.setTextColor(Color.WHITE);
+            tabItem2.setTextColor(Color.parseColor("#99FFFFFF"));
+            tabItem2.setTypeface(null, Typeface.NORMAL);
+        }
+        else {
+            tabItem2.setTypeface(null, Typeface.BOLD);
+            tabItem2.setTextColor(Color.WHITE);
+            tabItem1.setTextColor(Color.parseColor("#99FFFFFF"));
+            tabItem1.setTypeface(null, Typeface.NORMAL);
+        }
     }
 }

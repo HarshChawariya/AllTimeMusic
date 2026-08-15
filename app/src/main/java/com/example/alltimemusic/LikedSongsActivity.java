@@ -1,5 +1,8 @@
 package com.example.alltimemusic;
 
+import android.content.ContentUris;
+import android.graphics.drawable.Drawable;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -11,9 +14,13 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import com.bumptech.glide.Glide;
+import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.bumptech.glide.load.resource.bitmap.CenterCrop;
+import com.bumptech.glide.request.target.CustomTarget;
+import com.bumptech.glide.request.transition.Transition;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -134,8 +141,8 @@ public class LikedSongsActivity extends AppCompatActivity {
         miniProfile.setImageResource(R.drawable.profile);
         setDefaultMiniProfile();
 
-        android.net.Uri sArtworkUri = android.net.Uri.parse("content://media/external/audio/albumart");
-        android.net.Uri uri = android.content.ContentUris.withAppendedId(sArtworkUri, song.albumId);
+        Uri sArtworkUri = Uri.parse("content://media/external/audio/albumart");
+        Uri uri = ContentUris.withAppendedId(sArtworkUri, song.albumId);
 
         // Use Glide with enhanced caching and no-animation for smoothness
         Glide.with(this)
@@ -144,11 +151,11 @@ public class LikedSongsActivity extends AppCompatActivity {
                 .error(R.drawable.profile)
                 .fallback(R.drawable.profile)
                 .transform(new CenterCrop())
-                .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.ALL)
+                .diskCacheStrategy(DiskCacheStrategy.ALL)
                 .dontAnimate()
-                .into(new com.bumptech.glide.request.target.CustomTarget<android.graphics.drawable.Drawable>() {
+                .into(new CustomTarget<Drawable>() {
                     @Override
-                    public void onResourceReady(@NonNull android.graphics.drawable.Drawable resource, @androidx.annotation.Nullable com.bumptech.glide.request.transition.Transition<? super android.graphics.drawable.Drawable> transition) {
+                    public void onResourceReady(@NonNull Drawable resource, @Nullable Transition<? super Drawable> transition) {
                         miniProfile.setImageDrawable(resource);
                         // Dynamically set to Match Parent for real images to fill the mini player container (50dp)
                         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
@@ -159,12 +166,12 @@ public class LikedSongsActivity extends AppCompatActivity {
                     }
 
                     @Override
-                    public void onLoadCleared(@androidx.annotation.Nullable android.graphics.drawable.Drawable placeholder) {
+                    public void onLoadCleared(@Nullable Drawable placeholder) {
                         miniProfile.setImageDrawable(placeholder);
                     }
 
                     @Override
-                    public void onLoadFailed(@androidx.annotation.Nullable android.graphics.drawable.Drawable errorDrawable) {
+                    public void onLoadFailed(@Nullable Drawable errorDrawable) {
                         setDefaultMiniProfile();
                     }
                 });

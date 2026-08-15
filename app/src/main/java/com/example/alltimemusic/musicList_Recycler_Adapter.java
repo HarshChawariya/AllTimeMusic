@@ -1,9 +1,12 @@
 package com.example.alltimemusic;
 
 import android.annotation.SuppressLint;
+import android.content.ContentUris;
 import android.content.Context;
 import android.graphics.Color;
 
+import android.graphics.drawable.Drawable;
+import android.net.Uri;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -14,11 +17,14 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.load.resource.bitmap.CenterCrop;
+import com.bumptech.glide.request.target.CustomTarget;
+import com.bumptech.glide.request.transition.Transition;
 import com.google.android.material.imageview.ShapeableImageView;
 
 import java.util.ArrayList;
@@ -256,8 +262,8 @@ public class musicList_Recycler_Adapter extends RecyclerView.Adapter<musicList_R
         imageView.setImageResource(R.drawable.profile);
         setDefaultListProfileImage(imageView); // Reset size to default first
 
-        android.net.Uri sArtworkUri = android.net.Uri.parse("content://media/external/audio/albumart");
-        android.net.Uri uri = android.content.ContentUris.withAppendedId(sArtworkUri, item.albumId);
+        Uri sArtworkUri = Uri.parse("content://media/external/audio/albumart");
+        Uri uri = ContentUris.withAppendedId(sArtworkUri, item.albumId);
 
         Glide.with(context)
                 .load(uri)
@@ -267,9 +273,9 @@ public class musicList_Recycler_Adapter extends RecyclerView.Adapter<musicList_R
                 .transform(new CenterCrop())
                 .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.ALL)
                 .dontAnimate() // Fix flickering
-                .into(new com.bumptech.glide.request.target.CustomTarget<android.graphics.drawable.Drawable>() {
+                .into(new CustomTarget<Drawable>() {
                     @Override
-                    public void onResourceReady(@NonNull android.graphics.drawable.Drawable resource, @androidx.annotation.Nullable com.bumptech.glide.request.transition.Transition<? super android.graphics.drawable.Drawable> transition) {
+                    public void onResourceReady(@NonNull Drawable resource, @Nullable Transition<? super Drawable> transition) {
                         imageView.setImageDrawable(resource);
                         ViewGroup.LayoutParams params = imageView.getLayoutParams();
                         params.width = ViewGroup.LayoutParams.MATCH_PARENT;
@@ -278,13 +284,13 @@ public class musicList_Recycler_Adapter extends RecyclerView.Adapter<musicList_R
                     }
 
                     @Override
-                    public void onLoadCleared(@androidx.annotation.Nullable android.graphics.drawable.Drawable placeholder) {
+                    public void onLoadCleared(@Nullable Drawable placeholder) {
                         imageView.setImageDrawable(placeholder);
                         setDefaultListProfileImage(imageView);
                     }
 
                     @Override
-                    public void onLoadFailed(@androidx.annotation.Nullable android.graphics.drawable.Drawable errorDrawable) {
+                    public void onLoadFailed(@Nullable Drawable errorDrawable) {
                         setDefaultListProfileImage(imageView);
                     }
                 });

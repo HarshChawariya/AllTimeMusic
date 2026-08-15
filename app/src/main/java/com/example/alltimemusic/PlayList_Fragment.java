@@ -7,6 +7,7 @@ import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.media.MediaPlayer;
 import android.net.Uri;
@@ -22,6 +23,8 @@ import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.animation.Animation;
+import android.view.animation.AnimationUtils;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.SeekBar;
@@ -32,6 +35,8 @@ import com.bumptech.glide.Glide;
 import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.bumptech.glide.load.resource.bitmap.CenterCrop;
 import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions;
+import com.bumptech.glide.request.target.CustomTarget;
+import com.bumptech.glide.request.transition.Transition;
 import com.google.android.material.imageview.ShapeableImageView;
 
 import java.util.ArrayList;
@@ -39,6 +44,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class PlayList_Fragment extends Fragment {
 
@@ -281,17 +288,6 @@ public class PlayList_Fragment extends Fragment {
 
     private void updateProfileImage(ShapeableImageView profile_imageView, musicList_Structure song) {
         if (profile_imageView == null || song == null) return;
-        /*
-         *BUG FIX: Explicitly clear Glide and the ImageView FIRST to ensure old album art is gone
-         *Glide.with(this).clear(profile_imageView);
-         *profile_imageView.setImageResource(R.drawable.profile);
-         *Restore LayoutParams for consistent scaling - Default to 280dp as requested
-         *int defaultSizeInPx = (int) (280 * getResources().getDisplayMetrics().density);
-         *ViewGroup.LayoutParams initialParams = profile_imageView.getLayoutParams();
-         *initialParams.width = defaultSizeInPx;
-         *initialParams.height = defaultSizeInPx;
-         *profile_imageView.setLayoutParams(initialParams);
-         */
 
         // SYNC FIX: Explicitly clear Glide to prevent "ghosting" of the previous song's art
         Glide.with(this).clear(profile_imageView);
@@ -315,24 +311,26 @@ public class PlayList_Fragment extends Fragment {
                 .transform(new CenterCrop())
                 .diskCacheStrategy(DiskCacheStrategy.ALL)
                 .dontAnimate()
-                .into(new com.bumptech.glide.request.target.CustomTarget<Bitmap>() {
+                .into(new CustomTarget<Bitmap>() {
                     @Override
-                    public void onResourceReady(@NonNull Bitmap resource, @Nullable com.bumptech.glide.request.transition.Transition<? super Bitmap> transition) {
+                    public void onResourceReady(@NonNull Bitmap resource, @Nullable Transition<? super Bitmap> transition) {
                         profile_imageView.setImageBitmap(resource);
 
+                        // Set to 390dp for default image (main profile) as requested by user
+                        int sizeInPx = (int) (390 * getResources().getDisplayMetrics().density);
                         ViewGroup.LayoutParams params = profile_imageView.getLayoutParams();
-                        params.width = ViewGroup.LayoutParams.MATCH_PARENT;
-                        params.height = ViewGroup.LayoutParams.MATCH_PARENT;
+                        params.width = sizeInPx;
+                        params.height = sizeInPx;
                         profile_imageView.setLayoutParams(params);
                     }
 
                     @Override
-                    public void onLoadCleared(@Nullable android.graphics.drawable.Drawable placeholder) {
+                    public void onLoadCleared(@Nullable Drawable placeholder) {
                         setDefaultProfileImage(profile_imageView);
                     }
 
                     @Override
-                    public void onLoadFailed(@Nullable android.graphics.drawable.Drawable errorDrawable) {
+                    public void onLoadFailed(@Nullable Drawable errorDrawable) {
                         setDefaultProfileImage(profile_imageView);
                     }
                 });
@@ -537,21 +535,21 @@ public class PlayList_Fragment extends Fragment {
                 syncedLyricsTxt.setText(text);
                 
                 // Spotify style slide up animation
-                android.view.animation.Animation slideUp = android.view.animation.AnimationUtils.loadAnimation(getContext(), R.anim.slide_up);
+                Animation slideUp = AnimationUtils.loadAnimation(getContext(), R.anim.slide_up);
                 syncedLyricsTxt.startAnimation(slideUp);
             }
         }
     }
 
-    private java.util.List<LyricLine> parseLRC(String lrc) {
-        java.util.List<LyricLine> lines = new java.util.ArrayList<>();
+    private List<LyricLine> parseLRC(String lrc) {
+        List<LyricLine> lines = new ArrayList<>();
         if (lrc == null) return lines;
 
         String[] split = lrc.split("\n");
-        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("\\[(\\d{2}):(\\d{2})\\.(\\d{2,3})](.*)");
+        Pattern pattern = Pattern.compile("\\[(\\d{2}):(\\d{2})\\.(\\d{2,3})](.*)");
 
         for (String line : split) {
-            java.util.regex.Matcher matcher = pattern.matcher(line);
+            Matcher matcher = pattern.matcher(line);
             if (matcher.find()) {
                 try {
                     long min = Long.parseLong(Objects.requireNonNull(matcher.group(1)));
