@@ -308,8 +308,13 @@ public class PlayList_Fragment extends Fragment {
         
         lastLoadedArtPath = song.songPath;
 
-        // RESET UI IMMEDIATELY: Set placeholder first to avoid ghosting from previous song
-        setDefaultProfileImage(profile_imageView);
+        // FLICKER PREVENTION: 
+        // We only set the default placeholder immediately if the new song DOES NOT have album art.
+        // If it does have art, we keep the previous song's art briefly until the new one is decoded in the background.
+        // This eliminates the "jhatka" (flicker) of the red placeholder during transitions.
+        if (song.albumId <= 0) {
+            setDefaultProfileImage(profile_imageView);
+        }
 
         // Using Native Android Method (ContentResolver) as per new requirement
         loadAlbumArtNative(profile_imageView, song);
