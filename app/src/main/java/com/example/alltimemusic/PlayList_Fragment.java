@@ -6,20 +6,18 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.graphics.Canvas;
-import android.graphics.drawable.Drawable;
-import android.graphics.drawable.GradientDrawable;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Bundle;
 
 import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.palette.graphics.Palette;
 
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
+import android.util.Size;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -31,19 +29,16 @@ import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import com.bumptech.glide.Glide;
-import com.bumptech.glide.load.engine.DiskCacheStrategy;
-import com.bumptech.glide.load.resource.bitmap.CenterCrop;
-import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions;
-import com.bumptech.glide.request.target.CustomTarget;
-import com.bumptech.glide.request.transition.Transition;
 import com.google.android.material.imageview.ShapeableImageView;
 
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -54,7 +49,7 @@ public class PlayList_Fragment extends Fragment {
     private TextView songTitleTextView, artist_name, textSeek1, textSeek2, syncedLyricsTxt;
     private SeekBar seekBar;
     private ImageView pause, next, previous, loopButton, favButton;
-    private com.google.android.material.imageview.ShapeableImageView profile;
+    private ShapeableImageView profile;
     private LinearLayout rootLayout;
     private ArrayList<musicList_Structure> songs;
     public static ArrayList<musicList_Structure> arrPlayNext = new ArrayList<>();
@@ -68,11 +63,15 @@ public class PlayList_Fragment extends Fragment {
     private int position;
     public static int playingPosition = -1;
     public static String playingSongPath = ""; // Track song by path to support different list contexts
+    private String lastLoadedArtPath = ""; // Track last loaded art to prevent flickering
     private int currentLoopMode = 0; // 0: No Loop, 1: Single Loop, 2: Playlist Loop, 3: Shuffle
     private static final String PREFS_NAME = "MusicPrefs";
     private static final String KEY_LOOP_MODE = "currentLoopMode";
+    private static final String TAG = "PlayList_Fragment";
     private long lastClickTime = 0;
     private final Handler seekBarHandler = new Handler(Looper.getMainLooper());
+    // Executor for background tasks like loading album art to prevent UI freezes
+    private final ExecutorService backgroundExecutor = Executors.newSingleThreadExecutor();
     private final Runnable seekBarRunnable = new Runnable() {
         @Override
         public void run() {
@@ -111,6 +110,10 @@ public class PlayList_Fragment extends Fragment {
     public void onDestroy() {
         super.onDestroy();
         seekBarHandler.removeCallbacks(seekBarRunnable);
+        // Shutdown executor to prevent memory leaks when fragment is destroyed
+        if (backgroundExecutor != null) {
+            backgroundExecutor.shutdownNow();
+        }
     }
 
     public void startSeekBarUpdate() {
@@ -289,51 +292,154 @@ public class PlayList_Fragment extends Fragment {
     private void updateProfileImage(ShapeableImageView profile_imageView, musicList_Structure song) {
         if (profile_imageView == null || song == null) return;
 
-        // SYNC FIX: Explicitly clear Glide to prevent "ghosting" of the previous song's art
-        Glide.with(this).clear(profile_imageView);
+        // REDUNDANCY CHECK: Prevent flickering if the same song's art is already displayed
+        // We also check if the tag matches, if not, we must load.
+        String currentTag = (String) profile_imageView.getTag();
+        String targetTag = String.valueOf(song.albumId);
+        
+        if (song.songPath != null && song.songPath.equals(lastLoadedArtPath) && targetTag.equals(currentTag)) {
+            Log.d(TAG, "Skipping art load, already displaying: " + song.songTitle);
+            
+            // Even if we skip image load, we must ensure the activity color is synced
+            // especially when switching back from another activity.
+            syncActivityColorWithCurrentState();
+            return;
+        }
+        
+        lastLoadedArtPath = song.songPath;
+
+        // RESET UI IMMEDIATELY: Set placeholder first to avoid ghosting from previous song
+        setDefaultProfileImage(profile_imageView);
+
+        // Using Native Android Method (ContentResolver) as per new requirement
+        loadAlbumArtNative(profile_imageView, song);
+    }
+
+    /**
+     * Syncs the parent activity's dynamic colors with the currently stored dynamic color.
+     * Useful during activity transitions or when image loading is skipped.
+     */
+    private void syncActivityColorWithCurrentState() {
+        if (getActivity() instanceof MainActivity) {
+            ((MainActivity) getActivity()).applyDynamicColorsToUI(MainActivity.lastDynamicColor);
+        }
+        // In the future, LikedSongsActivity can also be added here if it implements applyDynamicColorsToUI
+    }
+
+    /**
+     * Loads album art using Native Android ContentResolver.
+     * Uses background thread to ensure smooth UI.
+     * Handles API 29+ with loadThumbnail and legacy with openInputStream.
+     * Extracts palette colors to sync with MainActivity UI.
+     * 
+     * @param imageView The ImageView to load art into.
+     * @param song The music structure containing album ID.
+     * 
+     * Uses: Native content loading, Background execution, Race condition prevention, Palette extraction.
+     * Disuses: External libraries like Glide, UI thread blocking.
+     */
+    private void loadAlbumArtNative(final ShapeableImageView imageView, final musicList_Structure song) {
+        if (imageView == null || song == null) return;
+
+        // Set tag to prevent incorrect image placement if user changes songs quickly (Race Condition)
+        final String tag = String.valueOf(song.albumId);
+        imageView.setTag(tag);
 
         if (song.albumId <= 0) {
-            // If no album art is available, immediately set the default placeholder
-            setDefaultProfileImage(profile_imageView);
+            Log.d(TAG, "No album ID for: " + song.songTitle);
+            setDefaultProfileImage(imageView);
+            // Re-apply default color if no album art
+            if (getActivity() instanceof MainActivity) {
+                ((MainActivity) getActivity()).applyDynamicColorsToUI(0xFF9D201A);
+            }
             return;
         }
 
-        Uri sArtworkUri = Uri.parse("content://media/external/audio/albumart");
-        Uri uri = ContentUris.withAppendedId(sArtworkUri, song.albumId);
+        backgroundExecutor.execute(() -> {
+            Bitmap albumArt = null;
+            try {
+                if (getContext() == null) return;
 
-        // Use Glide with Palette for dynamic background color extraction
-        Glide.with(this)
-                .asBitmap()
-                .load(uri)
-                .placeholder(R.drawable.profile)
-                .error(R.drawable.profile)
-                .fallback(R.drawable.profile)
-                .transform(new CenterCrop())
-                .diskCacheStrategy(DiskCacheStrategy.ALL)
-                .dontAnimate()
-                .into(new CustomTarget<Bitmap>() {
-                    @Override
-                    public void onResourceReady(@NonNull Bitmap resource, @Nullable Transition<? super Bitmap> transition) {
-                        profile_imageView.setImageBitmap(resource);
+                // Standard URI for album art
+                Uri sArtworkUri = Uri.parse("content://media/external/audio/albumart");
+                Uri uri = ContentUris.withAppendedId(sArtworkUri, song.albumId);
+                
+                Log.d(TAG, "Attempting to load art for: " + song.songTitle + " URI: " + uri);
 
-                        // Set to 390dp for default image (main profile) as requested by user
-                        int sizeInPx = (int) (390 * getResources().getDisplayMetrics().density);
-                        ViewGroup.LayoutParams params = profile_imageView.getLayoutParams();
-                        params.width = sizeInPx;
-                        params.height = sizeInPx;
-                        profile_imageView.setLayoutParams(params);
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                    try {
+                        // Modern way (Android 10+)
+                        albumArt = getContext().getContentResolver().loadThumbnail(uri, new Size(800, 800), null);
+                        Log.d(TAG, "loadThumbnail success for: " + song.songTitle);
+                    } catch (Exception e) {
+                        Log.w(TAG, "loadThumbnail failed, falling back to stream for: " + song.songTitle);
                     }
+                }
 
-                    @Override
-                    public void onLoadCleared(@Nullable Drawable placeholder) {
-                        setDefaultProfileImage(profile_imageView);
+                // Fallback for all versions if albumArt is still null
+                if (albumArt == null) {
+                    try (InputStream is = getContext().getContentResolver().openInputStream(uri)) {
+                        if (is != null) {
+                            albumArt = BitmapFactory.decodeStream(is);
+                            Log.d(TAG, "decodeStream success for: " + song.songTitle);
+                        }
+                    } catch (Exception e) {
+                        Log.e(TAG, "decodeStream failed for: " + song.songTitle + " - " + e.getMessage());
                     }
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "General error loading album art natively: " + e.getMessage());
+            }
 
-                    @Override
-                    public void onLoadFailed(@Nullable Drawable errorDrawable) {
-                        setDefaultProfileImage(profile_imageView);
+            final Bitmap finalBitmap = albumArt;
+            if (getActivity() != null) {
+                getActivity().runOnUiThread(() -> {
+                    // Check if the tag matches to ensure this bitmap is still for the current song
+                    if (tag.equals(imageView.getTag())) {
+                        if (finalBitmap != null) {
+                            imageView.setImageBitmap(finalBitmap);
+
+                            // Set to 390dp for success load as per original design
+                            int sizeInPx = (int) (390 * getResources().getDisplayMetrics().density);
+                            ViewGroup.LayoutParams params = imageView.getLayoutParams();
+                            params.width = sizeInPx;
+                            params.height = sizeInPx;
+                            imageView.setLayoutParams(params);
+
+                            Log.d(TAG, "Bitmap set to ImageView for: " + song.songTitle);
+
+                            // COLOR FETCHING: Extract palette from the native bitmap to sync UI colors
+                            // RACE CONDITION FIX: Only apply colors if this request is still relevant to the current song
+                            Palette.from(finalBitmap)
+                                    .setRegion(finalBitmap.getWidth()/4, finalBitmap.getHeight()/4, (3*finalBitmap.getWidth())/4, (3*finalBitmap.getHeight())/4)
+                                    .generate(palette -> {
+                                        // Final check: Is this palette still for the song currently displayed?
+                                        if (tag.equals(imageView.getTag()) && palette != null && getActivity() != null) {
+                                            if (getActivity() instanceof MainActivity) {
+                                                MainActivity activity = (MainActivity) getActivity();
+                                                int color = activity.extractBestColor(palette);
+                                                Log.d(TAG, "Applying extracted color for: " + song.songTitle);
+                                                activity.applyDynamicColorsToUI(color);
+                                            }
+                                            // Handle other activities here if they support color updates
+                                        } else {
+                                            Log.d(TAG, "Rejecting stale palette/null for: " + song.songTitle);
+                                        }
+                                    });
+                        } else {
+                            Log.d(TAG, "Final bitmap null, setting default for: " + song.songTitle);
+                            setDefaultProfileImage(imageView);
+                            // Set default color only if we are sure there is no art
+                            if (tag.equals(imageView.getTag()) && getActivity() instanceof MainActivity) {
+                                ((MainActivity) getActivity()).applyDynamicColorsToUI(0xFF9D201A);
+                            }
+                        }
+                    } else {
+                        Log.d(TAG, "Tag mismatch, skipping image/color set for: " + song.songTitle);
                     }
                 });
+            }
+        });
     }
     private void setDefaultProfileImage(ShapeableImageView profile_imageView) {
         profile_imageView.setImageResource(R.drawable.profile);
@@ -565,7 +671,7 @@ public class PlayList_Fragment extends Fragment {
                         lines.add(new LyricLine(time, text));
                     }
                 } catch (Exception e) {
-                    e.printStackTrace();
+                    Log.e(TAG, "Error parsing LRC line: " + e.getMessage());
                 }
             }
         }

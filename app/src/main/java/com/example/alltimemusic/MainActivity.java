@@ -54,6 +54,7 @@ import com.bumptech.glide.load.resource.bitmap.CenterCrop;
 import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions;
 import com.bumptech.glide.request.target.CustomTarget;
 import com.bumptech.glide.request.transition.Transition;
+import com.google.android.material.imageview.ShapeableImageView;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -75,7 +76,7 @@ public class MainActivity extends AppCompatActivity {
     private View indicator;
     private ViewPager2 viewPager;
     private ImageView miniPause;
-    private com.google.android.material.imageview.ShapeableImageView miniProfile;
+    private ShapeableImageView miniProfile;
     private ProgressBar miniProgressBar;
     LinearLayout mainLayout, musicList_LinLayOut, miniPlayer, TabLayout_LinearLayout;
     TextView miniPlayerText;
@@ -443,7 +444,7 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    private int extractBestColor(Palette palette) {
+    public int extractBestColor(Palette palette) {
         int defaultValue = 0xFF9D201A;
         Palette.Swatch bestSwatch = palette.getVibrantSwatch();
         if (bestSwatch == null) bestSwatch = palette.getDominantSwatch();
@@ -456,7 +457,7 @@ public class MainActivity extends AppCompatActivity {
         return Color.HSVToColor(hsv);
     }
 
-    private void applyDynamicColorsToUI(int color) {
+    public void applyDynamicColorsToUI(int color) {
         lastDynamicColor = color;
         if (musicList_LinLayOut != null) musicList_LinLayOut.setBackgroundColor(color);
         if (mainLayout.getVisibility() == GONE) getWindow().setStatusBarColor(color);
