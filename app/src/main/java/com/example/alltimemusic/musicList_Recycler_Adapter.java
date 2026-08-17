@@ -147,7 +147,7 @@ public class musicList_Recycler_Adapter extends RecyclerView.Adapter<musicList_R
                     
                     if (PlayList_Fragment.mediaPlayer != null && PlayList_Fragment.mediaPlayer.isPlaying()) {
                         PlayList_Fragment.arrPlayNext.add(selectedSong);
-                        Toast.makeText(context, context.getString(R.string.playing_next_turn, selectedSong.songTitle), Toast.LENGTH_SHORT).show();
+                        Toast.makeText(context, context.getString(R.string.playing_next_turn), Toast.LENGTH_SHORT).show();
                     } else {
                         currentItem = selectedSong;
                         currentPosition = currentIdx;
