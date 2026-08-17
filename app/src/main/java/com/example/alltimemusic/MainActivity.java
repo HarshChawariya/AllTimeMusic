@@ -155,9 +155,10 @@ public class MainActivity extends AppCompatActivity {
                     if (!hasPlain || !hasSynced) popup.addMenuItem(getString(R.string.add_lyrics_title));
                     if (lyrics != null && (hasPlain || hasSynced)) popup.addMenuItem(getString(R.string.delete_lyrics_menu));
                 }
+            } else if (viewPager.getCurrentItem() == 0) {
+                // Feature Requirement: Show Online/Offline mode only when in PlayList Fragment
+                popup.addMenuItem(isOfflineMode ? "Offline Mode" : "Online Mode");
             }
-            
-            popup.addMenuItem(isOfflineMode ? "Offline Mode" : "Online Mode");
 
             popup.setOnItemClickListener(title -> {
                 switch (title) {
