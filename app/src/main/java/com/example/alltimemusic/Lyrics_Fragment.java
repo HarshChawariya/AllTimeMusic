@@ -1,9 +1,14 @@
 package com.example.alltimemusic;
 
 import android.annotation.SuppressLint;
+import android.content.ContentUris;
+import android.graphics.drawable.Drawable;
+import android.graphics.drawable.GradientDrawable;
+import android.net.Uri;
 import android.os.Bundle;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -14,6 +19,8 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
+import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
@@ -23,6 +30,8 @@ import android.widget.Toast;
 
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.load.resource.bitmap.CenterCrop;
+import com.bumptech.glide.request.target.CustomTarget;
+import com.bumptech.glide.request.transition.Transition;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.imageview.ShapeableImageView;
 
@@ -264,16 +273,16 @@ public class Lyrics_Fragment extends Fragment {
         getActivity().runOnUiThread(() -> {
             // Update Top Fade with dynamic gradient
             if (topFadeView != null) {
-                android.graphics.drawable.GradientDrawable topGd = new android.graphics.drawable.GradientDrawable(
-                        android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+                GradientDrawable topGd = new GradientDrawable(
+                        GradientDrawable.Orientation.TOP_BOTTOM,
                         new int[] {color, android.graphics.Color.TRANSPARENT}
                 );
                 topFadeView.setBackground(topGd);
             }
             // Update Bottom Fade with dynamic gradient
             if (bottomFadeView != null) {
-                android.graphics.drawable.GradientDrawable bottomGd = new android.graphics.drawable.GradientDrawable(
-                        android.graphics.drawable.GradientDrawable.Orientation.BOTTOM_TOP,
+                GradientDrawable bottomGd = new GradientDrawable(
+                        GradientDrawable.Orientation.BOTTOM_TOP,
                         new int[] {color, android.graphics.Color.TRANSPARENT}
                 );
                 bottomFadeView.setBackground(bottomGd);
@@ -285,17 +294,17 @@ public class Lyrics_Fragment extends Fragment {
     private void updateProfileImage(ShapeableImageView profile_imageView, musicList_Structure song) {
         if (profile_imageView == null || song == null) return;
 
-        android.net.Uri sArtworkUri = android.net.Uri.parse("content://media/external/audio/albumart");
-        android.net.Uri uri = android.content.ContentUris.withAppendedId(sArtworkUri, song.albumId);
+        Uri sArtworkUri = Uri.parse("content://media/external/audio/albumart");
+        Uri uri = ContentUris.withAppendedId(sArtworkUri, song.albumId);
         // Use Glide for efficient metadata image loading in lyrics mini player
         Glide.with(this)
                 .load(uri)
                 .placeholder(R.drawable.profile)
                 .error(R.drawable.profile)
                 .transform(new CenterCrop())
-                .into(new com.bumptech.glide.request.target.CustomTarget<android.graphics.drawable.Drawable>() {
+                .into(new CustomTarget<Drawable>() {
                     @Override
-                    public void onResourceReady(@NonNull android.graphics.drawable.Drawable resource, @androidx.annotation.Nullable com.bumptech.glide.request.transition.Transition<? super android.graphics.drawable.Drawable> transition) {
+                    public void onResourceReady(@NonNull Drawable resource, @Nullable Transition<? super Drawable> transition) {
                         profile_imageView.setImageDrawable(resource);
                         // Dynamically set to Match Parent for real images to fill the mini player container (50dp)
                         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
@@ -306,12 +315,12 @@ public class Lyrics_Fragment extends Fragment {
                     }
 
                     @Override
-                    public void onLoadCleared(@androidx.annotation.Nullable android.graphics.drawable.Drawable placeholder) {
+                    public void onLoadCleared(@Nullable Drawable placeholder) {
                         profile_imageView.setImageDrawable(placeholder);
                     }
 
                     @Override
-                    public void onLoadFailed(@androidx.annotation.Nullable android.graphics.drawable.Drawable errorDrawable) {
+                    public void onLoadFailed(@Nullable Drawable errorDrawable) {
                         profile_imageView.setImageDrawable(errorDrawable);
                         setDefaultProfileImage(profile_imageView);
                     }
@@ -921,9 +930,9 @@ public class Lyrics_Fragment extends Fragment {
         View dialogView = getLayoutInflater().inflate(R.layout.dialog_add_lyrics, null);
         bottomSheetDialog.setContentView(dialogView);
 
-        android.widget.EditText input = dialogView.findViewById(R.id.lyrics_input);
-        android.widget.Button btnSave = dialogView.findViewById(R.id.btn_save_lyrics);
-        android.widget.Button btnCancel = dialogView.findViewById(R.id.btn_cancel_lyrics);
+        EditText input = dialogView.findViewById(R.id.lyrics_input);
+        Button btnSave = dialogView.findViewById(R.id.btn_save_lyrics);
+        Button btnCancel = dialogView.findViewById(R.id.btn_cancel_lyrics);
 
         // Apply Dynamic Colors to Buttons
         int dynamicColor = MainActivity.lastDynamicColor;

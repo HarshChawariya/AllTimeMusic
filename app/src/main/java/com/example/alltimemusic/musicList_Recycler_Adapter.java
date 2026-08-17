@@ -22,6 +22,7 @@ import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
+import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.bumptech.glide.load.resource.bitmap.CenterCrop;
 import com.bumptech.glide.request.target.CustomTarget;
 import com.bumptech.glide.request.transition.Transition;
@@ -271,7 +272,7 @@ public class musicList_Recycler_Adapter extends RecyclerView.Adapter<musicList_R
                 .error(R.drawable.profile)
                 .fallback(R.drawable.profile)
                 .transform(new CenterCrop())
-                .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.ALL)
+                .diskCacheStrategy(DiskCacheStrategy.ALL)
                 .dontAnimate() // Fix flickering
                 .into(new CustomTarget<Drawable>() {
                     @Override

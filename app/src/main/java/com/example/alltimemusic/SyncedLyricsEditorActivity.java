@@ -1,9 +1,14 @@
 package com.example.alltimemusic;
 
+import android.content.Context;
+import android.content.res.ColorStateList;
 import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
@@ -12,6 +17,7 @@ import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -20,6 +26,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Stack;
 
 import linc.com.amplituda.Amplituda;
 
@@ -39,8 +46,8 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
     private boolean isPreviewMode = false;
     private boolean isEditingSynced = true; // Priority: Synced by default
 
-    private final java.util.Stack<List<LyricLine>> undoStack = new java.util.Stack<>();
-    private final java.util.Stack<List<LyricLine>> redoStack = new java.util.Stack<>();
+    private final Stack<List<LyricLine>> undoStack = new Stack<>();
+    private final Stack<List<LyricLine>> redoStack = new Stack<>();
 
     private final Handler updateHandler = new Handler(Looper.getMainLooper());
     private final Runnable updateRunnable = new Runnable() {
@@ -359,16 +366,16 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
 
     private void applyDynamicFades(int color) {
         if (topFade != null) {
-            android.graphics.drawable.GradientDrawable topGd = new android.graphics.drawable.GradientDrawable(
-                    android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
-                    new int[]{color, android.graphics.Color.TRANSPARENT}
+            GradientDrawable topGd = new GradientDrawable(
+                    GradientDrawable.Orientation.TOP_BOTTOM,
+                    new int[]{color, Color.TRANSPARENT}
             );
             topFade.setBackground(topGd);
         }
         if (bottomFade != null) {
-            android.graphics.drawable.GradientDrawable bottomGd = new android.graphics.drawable.GradientDrawable(
-                    android.graphics.drawable.GradientDrawable.Orientation.BOTTOM_TOP,
-                    new int[]{color, android.graphics.Color.TRANSPARENT}
+            GradientDrawable bottomGd = new GradientDrawable(
+                    GradientDrawable.Orientation.BOTTOM_TOP,
+                    new int[]{color, Color.TRANSPARENT}
             );
             bottomFade.setBackground(bottomGd);
         }
@@ -489,18 +496,18 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
     private void updateTimestampButtonStyle(long timeMs) {
         if (timeMs > 0) {
             btnSetTimestamp.setText(getString(R.string.clear_time_stamp));
-            btnSetTimestamp.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.GRAY));
+            btnSetTimestamp.setBackgroundTintList(ColorStateList.valueOf(Color.GRAY));
         } else {
             btnSetTimestamp.setText(getString(R.string.set_time_stamp));
-            btnSetTimestamp.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#9D201A")));
+            btnSetTimestamp.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#9D201A")));
         }
     }
 
     private void vibrate(long ms) {
-        android.os.Vibrator v = (android.os.Vibrator) getSystemService(android.content.Context.VIBRATOR_SERVICE);
+        Vibrator v = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
         if (v != null) {
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                v.vibrate(android.os.VibrationEffect.createOneShot(ms, android.os.VibrationEffect.DEFAULT_AMPLITUDE));
+                v.vibrate(VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE));
             } else {
                 v.vibrate(ms);
             }
@@ -527,7 +534,7 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
 
     private void showEditDialog(int index) {
         saveStateToUndo();
-        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this);
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle(getString(R.string.edit_lyric_line_dialog));
         
         final EditText input = new EditText(this);
@@ -550,7 +557,7 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
 
     private void addNewLineDialog(int index, String initialText) {
         saveStateToUndo();
-        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this);
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle(getString(R.string.add_lyric_line_dialog));
         
         final EditText input = new EditText(this);
