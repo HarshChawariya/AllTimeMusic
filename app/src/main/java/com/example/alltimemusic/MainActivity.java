@@ -9,6 +9,7 @@ import android.animation.ValueAnimator;
 import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Bitmap;
@@ -180,9 +181,8 @@ public class MainActivity extends AppCompatActivity {
                         }
                         break;
                     case "Lyrics Editor":
-                        for (Fragment f : getSupportFragmentManager().getFragments()) {
-                            if (f instanceof Lyrics_Fragment) ((Lyrics_Fragment) f).openSyncedLyricsEditor();
-                        }
+                        // BUG FIX: Handle directly in Activity to ensure availability regardless of Fragment lifecycle
+                        openSyncedLyricsEditorDirectly();
                         break;
                     case "Offline Mode":
                     case "Online Mode":
@@ -657,6 +657,35 @@ public class MainActivity extends AppCompatActivity {
             tabItem2.setTextColor(Color.WHITE);
             tabItem1.setTextColor(Color.parseColor("#99FFFFFF"));
             tabItem1.setTypeface(null, Typeface.NORMAL);
+        }
+    }
+
+
+    /**
+     * Directly opens the Synced Lyrics Editor by handling logic at the Activity level.
+     * This ensures the editor works even if Lyrics_Fragment hasn't been created yet.
+     */
+    private void openSyncedLyricsEditorDirectly() {
+        musicList_Structure current = musicList_Recycler_Adapter.currentItem;
+        if (current != null) {
+            FavoritesDatabase db = FavoritesDatabase.getInstance(this);
+            String[] lyrics = db.getCachedLyrics(current.songPath);
+
+            // Logic: If plain lyrics are missing, open Add Lyrics dialog via fragment trigger
+            if (lyrics == null || lyrics[0] == null || lyrics[0].isEmpty()) {
+                Toast.makeText(this, getString(R.string.please_add_plain_lyrics_first), Toast.LENGTH_SHORT).show();
+                
+                // Trigger Add Lyrics dialog by switching to Lyrics Fragment first
+                viewPager.setCurrentItem(1, true);
+                viewPager.postDelayed(() -> {
+                    for (Fragment f : getSupportFragmentManager().getFragments()) {
+                        if (f instanceof Lyrics_Fragment) ((Lyrics_Fragment) f).openAddLyricsDialog();
+                    }
+                }, 200);
+            } else {
+                Intent intent = new Intent(this, SyncedLyricsEditorActivity.class);
+                startActivity(intent);
+            }
         }
     }
 }
