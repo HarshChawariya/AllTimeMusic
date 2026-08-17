@@ -347,7 +347,18 @@ public class MainActivity extends AppCompatActivity {
 
                     if (displayName != null && !displayName.isEmpty()) {
                         String name = displayName.toLowerCase();
-                        if (name.endsWith(".mp3") && !name.startsWith(".") && !Character.isDigit(name.charAt(0)) && Character.isAlphabetic(name.charAt(0))) {
+                        String lowerPath = path != null ? path.toLowerCase() : "";
+
+                        // PATH FILTER: Exclude common non-music directories to keep the list clean
+                        boolean isBlacklistedPath = lowerPath.contains("whatsapp") ||
+                                lowerPath.contains("telegram") ||
+                                lowerPath.contains("recordings") ||
+                                lowerPath.contains("notifications") ||
+                                lowerPath.contains("alarms") ||
+                                lowerPath.contains("ringtones") ||
+                                lowerPath.contains("call_rec");
+
+                        if (!isBlacklistedPath && name.endsWith(".mp3") && !name.startsWith(".") && !Character.isDigit(name.charAt(0)) && Character.isAlphabetic(name.charAt(0))) {
                             musicList_Structure song = new musicList_Structure(title, path, artist, albumId);
                             song.getCleanArtist(); // Process regex in background
                             if (song.songTitle != null && !song.songTitle.isEmpty()) {
