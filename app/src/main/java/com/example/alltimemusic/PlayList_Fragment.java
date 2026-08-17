@@ -16,6 +16,8 @@ import androidx.palette.graphics.Palette;
 
 import android.os.Handler;
 import android.os.Looper;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
 import android.util.Log;
 import android.util.Size;
 import android.view.LayoutInflater;
@@ -732,6 +734,26 @@ public class PlayList_Fragment extends Fragment {
         return 0;
     }
 
+    /**
+     * Provides physical feedback to the user on button clicks.
+     * Matches the implementation in SyncedLyricsEditorActivity for consistency.
+     * 
+     * @param ms The duration of the vibration in milliseconds.
+     * Uses: Native Vibrator service, Version-specific vibration effects.
+     * Disuses: Generic haptic constants for more precise control.
+     */
+    private void vibrate(long ms) {
+        if (getContext() == null) return;
+        Vibrator v = (Vibrator) getContext().getSystemService(Context.VIBRATOR_SERVICE);
+        if (v != null) {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                v.vibrate(VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE));
+            } else {
+                v.vibrate(ms);
+            }
+        }
+    }
+
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         // Inflate the layout for this fragment
@@ -773,6 +795,9 @@ public class PlayList_Fragment extends Fragment {
         }
 
         pause.setOnClickListener(v -> {
+            // Provide vibration feedback on click (Consistent with Lyrics Editor style)
+            vibrate(40);
+
             if (mediaPlayer != null) {
                 if (mediaPlayer.isPlaying()) {
                     pause.setImageResource(R.drawable.play);
@@ -786,8 +811,15 @@ public class PlayList_Fragment extends Fragment {
             }
         });
 
-        next.setOnClickListener(v -> playNext());
-        previous.setOnClickListener(v -> playPrevious());
+        next.setOnClickListener(v -> {
+            vibrate(25);
+            playNext();
+        });
+        
+        previous.setOnClickListener(v -> {
+            vibrate(25);
+            playPrevious();
+        });
 
         seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
@@ -802,12 +834,16 @@ public class PlayList_Fragment extends Fragment {
         });
 
         loopButton.setOnClickListener(v -> {
+            vibrate(25);
             currentLoopMode = (currentLoopMode + 1) % 4;
             saveLoopMode(currentLoopMode); // Save to SharedPreferences
             applyLoopMode(true);
         });
 
-        favButton.setOnClickListener(v -> toggleFavourite());
+        favButton.setOnClickListener(v -> {
+            vibrate(25);
+            toggleFavourite();
+        });
 
         favButton.setOnLongClickListener(v -> {
             Intent intent = new Intent(getContext(), LikedSongsActivity.class);
@@ -817,7 +853,10 @@ public class PlayList_Fragment extends Fragment {
 
         logo.setOnClickListener(v -> {
             long clickTime = System.currentTimeMillis();
-            if (clickTime - lastClickTime < 300) toggleFavourite();
+            if (clickTime - lastClickTime < 300) {
+                vibrate(25);
+                toggleFavourite();
+            }
             lastClickTime = clickTime;
         });
 
