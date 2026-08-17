@@ -591,7 +591,6 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
             lyricLines.addAll(undoStack.pop());
             adapter.setLyrics(lyricLines);
             if (selectedIndex != -1) selectLine(Math.min(selectedIndex, lyricLines.size()-1));
-            Toast.makeText(this, getString(R.string.undo_successful), Toast.LENGTH_SHORT).show();
         } else {
             Toast.makeText(this, getString(R.string.nothing_to_undo), Toast.LENGTH_SHORT).show();
         }
@@ -609,7 +608,6 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
             lyricLines.addAll(redoStack.pop());
             adapter.setLyrics(lyricLines);
             if (selectedIndex != -1) selectLine(Math.min(selectedIndex, lyricLines.size()-1));
-            Toast.makeText(this, getString(R.string.redo_successful), Toast.LENGTH_SHORT).show();
         } else {
             Toast.makeText(this, getString(R.string.nothing_to_redo), Toast.LENGTH_SHORT).show();
         }
