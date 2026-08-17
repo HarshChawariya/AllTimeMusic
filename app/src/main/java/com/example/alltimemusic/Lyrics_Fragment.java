@@ -422,7 +422,7 @@ public class Lyrics_Fragment extends Fragment {
                             String plain = obj.optString("plainLyrics", "");
                             String synced = obj.optString("syncedLyrics", "");
 
-                            // NEW: Check Language
+                            // NEW: Check Language AND enforce Synced Lyrics requirement
                             if (isSupportedLanguage(plain + synced)) {
                                 if (!synced.isEmpty() && !synced.equalsIgnoreCase("null")) {
                                     Log.d("LyricsFetch", "✅ [SUCCESS] Stage 1: Synced Lyrics Found!");
@@ -568,10 +568,12 @@ public class Lyrics_Fragment extends Fragment {
                             String plain = item.optString("plainLyrics", "");
                             String synced = item.optString("syncedLyrics", "");
 
-                            // Filter by duration +/- 2 seconds (Strict) and language
-                            if (Math.abs(itemDuration - targetDuration) <= 2 && isSupportedLanguage(plain + synced)) {
+                            // Filter by duration +/- 2 seconds (Strict) AND language AND enforce Synced
+                            if (Math.abs(itemDuration - targetDuration) <= 2 && 
+                                !synced.isEmpty() && !synced.equalsIgnoreCase("null") &&
+                                isSupportedLanguage(plain + synced)) {
                                 bestMatch = item;
-                                Log.d("LyricsFetch", "🎯 [FOUND] Stage 3 Match: Title + Duration matched!");
+                                Log.d("LyricsFetch", "🎯 [FOUND] Stage 3 Match: Title + Duration + Synced matched!");
                                 break;
                             }
                         }
