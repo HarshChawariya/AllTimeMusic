@@ -910,6 +910,11 @@ public class Lyrics_Fragment extends Fragment {
         if (getContext() == null) return;
 
         BottomSheetDialog bottomSheetDialog = new BottomSheetDialog(getContext(), R.style.BottomSheetDialogTheme);
+        // BUG FIX: Prevent accidental closure by clicking outside or back button
+        // This ensures the user doesn't lose their typed lyrics.
+        bottomSheetDialog.setCanceledOnTouchOutside(false);
+        bottomSheetDialog.setCancelable(false);
+
         // Note: Passing null for root is acceptable for BottomSheetDialog content, but we can use findViewById(android.R.id.content) if needed to silence the warning.
         // For fragments, it's safer to just let the dialog handle the layout.
         @SuppressLint("InflateParams")
