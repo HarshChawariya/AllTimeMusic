@@ -1,7 +1,10 @@
 package com.example.alltimemusic;
 
 import android.annotation.SuppressLint;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.ContentUris;
+import android.content.Context;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
@@ -173,6 +176,16 @@ public class Lyrics_Fragment extends Fragment {
         song_name.setText(mParam1);
         artist_name.setText(mParam2);
         lyricsTxt.setText(mParam3);
+
+        // Feature: Copy lyrics on long press (Plain Lyrics)
+        lyricsTxt.setOnLongClickListener(v -> {
+            copyToClipboard(lyricsTxt.getText().toString());
+            return true;
+        });
+
+        // Feature: Copy lyrics on long press (Synced Lyrics)
+        // Copy entire synced lyrics with timestamps as stored in DB
+        lyricsAdapter.setOnLyricLongClickListener(text -> copyToClipboard(currentSyncedLyrics));
 
         // BUG FIX: Immediately sync fades with the current global dynamic color on view creation
         updateInternalColors(MainActivity.lastDynamicColor);
@@ -911,6 +924,23 @@ public class Lyrics_Fragment extends Fragment {
             // Force a retry by clearing lastLoadedId and calling update
             lastLoadedSongId = "";
             updateLyricsSync();
+        }
+    }
+
+    /**
+     * Copies the provided text to the system clipboard and shows a toast confirmation.
+     * 
+     * @param text The text to be copied.
+     * Uses: ClipboardManager, Toast feedback.
+     */
+    private void copyToClipboard(String text) {
+        if (getContext() == null || text == null || text.isEmpty()) return;
+        
+        ClipboardManager clipboard = (ClipboardManager) getContext().getSystemService(Context.CLIPBOARD_SERVICE);
+        ClipData clip = ClipData.newPlainText("Lyrics", text);
+        if (clipboard != null) {
+            clipboard.setPrimaryClip(clip);
+            showToast("Lyrics Copied");
         }
     }
 
