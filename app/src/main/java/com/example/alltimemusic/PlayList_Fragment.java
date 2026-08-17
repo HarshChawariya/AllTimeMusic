@@ -257,7 +257,21 @@ public class PlayList_Fragment extends Fragment {
             if (songTitleTextView != null) songTitleTextView.setText(currentSong.songTitle);
             if (artist_name != null) artist_name.setText(currentSong.getCleanArtist());
 
-            updateProfileImage(profile, currentSong);
+            // MASTER PLAN STEP 2: Instant Cache Access
+            // Before loading the image, check if we have a cached color to update the Activity background immediately.
+            if (getContext() != null) {
+                int cachedColor = FavoritesDatabase.getInstance(getContext()).getCachedColor(currentSong.songPath);
+                if (cachedColor != 0 && getActivity() instanceof MainActivity) {
+                    ((MainActivity) getActivity()).applyDynamicColorsToUI(cachedColor);
+                    Log.d(TAG, "Instant cached color applied for: " + currentSong.songTitle);
+                }
+            }
+
+            // SYNC STABILITY: Only re-load art if it's actually different to prevent flickering/resets
+            if (!currentSong.songPath.equals(playingSongPath)) {
+                updateProfileImage(profile, currentSong);
+            }
+
             loadSyncedLyrics(currentSong.songPath);
 
             FavoritesDatabase db = FavoritesDatabase.getInstance(getContext());
@@ -299,16 +313,12 @@ public class PlayList_Fragment extends Fragment {
         
         if (song.songPath != null && song.songPath.equals(lastLoadedArtPath) && targetTag.equals(currentTag)) {
             Log.d(TAG, "Skipping art load, already displaying: " + song.songTitle);
-            
-            // Even if we skip image load, we must ensure the activity color is synced
-            // especially when switching back from another activity.
-            syncActivityColorWithCurrentState();
             return;
         }
-        
+
         lastLoadedArtPath = song.songPath;
 
-        // FLICKER PREVENTION: 
+        // FLICKER PREVENTION:
         // We only set the default placeholder immediately if the new song DOES NOT have album art.
         // If it does have art, we keep the previous song's art briefly until the new one is decoded in the background.
         // This eliminates the "jhatka" (flicker) of the red placeholder during transitions.
@@ -321,26 +331,14 @@ public class PlayList_Fragment extends Fragment {
     }
 
     /**
-     * Syncs the parent activity's dynamic colors with the currently stored dynamic color.
-     * Useful during activity transitions or when image loading is skipped.
-     */
-    private void syncActivityColorWithCurrentState() {
-        if (getActivity() instanceof MainActivity) {
-            ((MainActivity) getActivity()).applyDynamicColorsToUI(MainActivity.lastDynamicColor);
-        }
-        // In the future, LikedSongsActivity can also be added here if it implements applyDynamicColorsToUI
-    }
-
-    /**
      * Loads album art using Native Android ContentResolver.
      * Uses background thread to ensure smooth UI.
      * Handles API 29+ with loadThumbnail and legacy with openInputStream.
-     * Extracts palette colors to sync with MainActivity UI.
-     * 
+
      * @param imageView The ImageView to load art into.
      * @param song The music structure containing album ID.
-     * 
-     * Uses: Native content loading, Background execution, Race condition prevention, Palette extraction.
+
+     * Uses: Native content loading, Background execution, Race condition prevention.
      * Disuses: External libraries like Glide, UI thread blocking.
      */
     private void loadAlbumArtNative(final ShapeableImageView imageView, final musicList_Structure song) {
@@ -353,10 +351,6 @@ public class PlayList_Fragment extends Fragment {
         if (song.albumId <= 0) {
             Log.d(TAG, "No album ID for: " + song.songTitle);
             setDefaultProfileImage(imageView);
-            // Re-apply default color if no album art
-            if (getActivity() instanceof MainActivity) {
-                ((MainActivity) getActivity()).applyDynamicColorsToUI(0xFF9D201A);
-            }
             return;
         }
 
@@ -368,7 +362,7 @@ public class PlayList_Fragment extends Fragment {
                 // Standard URI for album art
                 Uri sArtworkUri = Uri.parse("content://media/external/audio/albumart");
                 Uri uri = ContentUris.withAppendedId(sArtworkUri, song.albumId);
-                
+
                 Log.d(TAG, "Attempting to load art for: " + song.songTitle + " URI: " + uri);
 
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
@@ -413,34 +407,51 @@ public class PlayList_Fragment extends Fragment {
 
                             Log.d(TAG, "Bitmap set to ImageView for: " + song.songTitle);
 
-                            // COLOR FETCHING: Extract palette from the native bitmap to sync UI colors
-                            // RACE CONDITION FIX: Only apply colors if this request is still relevant to the current song
-                            Palette.from(finalBitmap)
-                                    .setRegion(finalBitmap.getWidth()/4, finalBitmap.getHeight()/4, (3*finalBitmap.getWidth())/4, (3*finalBitmap.getHeight())/4)
-                                    .generate(palette -> {
-                                        // Final check: Is this palette still for the song currently displayed?
-                                        if (tag.equals(imageView.getTag()) && palette != null && getActivity() != null) {
-                                            if (getActivity() instanceof MainActivity) {
-                                                MainActivity activity = (MainActivity) getActivity();
-                                                int color = activity.extractBestColor(palette);
-                                                Log.d(TAG, "Applying extracted color for: " + song.songTitle);
-                                                activity.applyDynamicColorsToUI(color);
+                            // MASTER CACHE IMPLEMENTATION: 
+                            // CACHE-FIRST RULE: Only extract color if not already in database to save CPU/Battery
+                            if (getContext() != null && FavoritesDatabase.getInstance(getContext()).getCachedColor(song.songPath) == 0) {
+                                Palette.from(finalBitmap)
+                                        .setRegion(finalBitmap.getWidth()/4, finalBitmap.getHeight()/4, (3*finalBitmap.getWidth())/4, (3*finalBitmap.getHeight())/4)
+                                        .generate(palette -> {
+                                            if (palette != null && getContext() != null) {
+                                                // MASTER CACHE LOGIC: Extract and adjust color
+                                                int color = 0xFF9D201A;
+                                                Palette.Swatch bestSwatch = palette.getVibrantSwatch();
+                                                if (bestSwatch == null) bestSwatch = palette.getDominantSwatch();
+                                                if (bestSwatch == null) bestSwatch = palette.getDarkVibrantSwatch();
+                                                if (bestSwatch != null) {
+                                                    int targetColor = bestSwatch.getRgb();
+                                                    // Apply HSV adjustments as per MainActivity for consistent high-quality look
+                                                    float[] hsv = new float[3];
+                                                    android.graphics.Color.colorToHSV(targetColor, hsv);
+                                                    hsv[1] = Math.min(hsv[1] * 1.3f, 0.85f);
+                                                    hsv[2] = Math.max(Math.min(hsv[2], 0.45f), 0.18f);
+                                                    color = android.graphics.Color.HSVToColor(hsv);
+                                                }
+                                                
+                                                // Save to Master Cache
+                                                FavoritesDatabase.getInstance(getContext()).saveColor(song.songPath, color);
+                                                Log.d(TAG, "Color cached in background for: " + song.songTitle);
+                                                
+                                                // PROACTIVE SYNC: Force Activity to re-check the database immediately
+                                                if (getActivity() != null) {
+                                                    getActivity().runOnUiThread(() -> {
+                                                        if (getActivity() instanceof MainActivity) {
+                                                            ((MainActivity) getActivity()).updateMiniPlayer();
+                                                        }
+                                                    });
+                                                }
                                             }
-                                            // Handle other activities here if they support color updates
-                                        } else {
-                                            Log.d(TAG, "Rejecting stale palette/null for: " + song.songTitle);
-                                        }
-                                    });
+                                        });
+                            } else {
+                                Log.d(TAG, "Palette skipped, color exists in cache for: " + song.songTitle);
+                            }
                         } else {
                             Log.d(TAG, "Final bitmap null, setting default for: " + song.songTitle);
                             setDefaultProfileImage(imageView);
-                            // Set default color only if we are sure there is no art
-                            if (tag.equals(imageView.getTag()) && getActivity() instanceof MainActivity) {
-                                ((MainActivity) getActivity()).applyDynamicColorsToUI(0xFF9D201A);
-                            }
                         }
                     } else {
-                        Log.d(TAG, "Tag mismatch, skipping image/color set for: " + song.songTitle);
+                        Log.d(TAG, "Tag mismatch, skipping image set for: " + song.songTitle);
                     }
                 });
             }

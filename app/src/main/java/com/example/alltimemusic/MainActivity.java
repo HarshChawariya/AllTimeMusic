@@ -12,6 +12,7 @@ import android.content.Context;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.BitmapDrawable;
@@ -26,6 +27,8 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.MediaStore;
+import android.util.Log;
+import android.util.Size;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.animation.Animation;
@@ -56,6 +59,7 @@ import com.bumptech.glide.request.target.CustomTarget;
 import com.bumptech.glide.request.transition.Transition;
 import com.google.android.material.imageview.ShapeableImageView;
 
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.concurrent.ExecutorService;
@@ -244,6 +248,57 @@ public class MainActivity extends AppCompatActivity {
             
             // 3. Final UI Sync from scanned data
             updateUI(scanned);
+
+            // 4. MASTER PLAN: Start background pre-fetching of colors for all songs
+            startBackgroundColorCaching(scanned);
+        });
+    }
+
+    /**
+     * Iterates through the song list and caches colors for those missing from DB.
+     * Runs in a background thread to ensure zero UI lag.
+     */
+    private void startBackgroundColorCaching(ArrayList<musicList_Structure> songs) {
+        executorService.execute(() -> {
+            FavoritesDatabase db = FavoritesDatabase.getInstance(this);
+            for (musicList_Structure song : songs) {
+                // Check if color is already cached to avoid redundant processing
+                if (db.getCachedColor(song.songPath) == 0) {
+                    try {
+                        Uri sArtworkUri = Uri.parse("content://media/external/audio/albumart");
+                        Uri uri = ContentUris.withAppendedId(sArtworkUri, song.albumId);
+                        
+                        Bitmap bitmap = null;
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                            try {
+                                bitmap = getContentResolver().loadThumbnail(uri, new Size(200, 200), null);
+                            } catch (Exception ignored) {}
+                        }
+                        
+                        if (bitmap == null) {
+                            try (InputStream is = getContentResolver().openInputStream(uri)) {
+                                if (is != null) {
+                                    BitmapFactory.Options options = new BitmapFactory.Options();
+                                    options.inSampleSize = 4; // Load small version for speed
+                                    bitmap = BitmapFactory.decodeStream(is, null, options);
+                                }
+                            } catch (Exception ignored) {}
+                        }
+
+                        if (bitmap != null) {
+                            Palette palette = Palette.from(bitmap).generate();
+                            int color = extractBestColor(palette);
+                            db.saveColor(song.songPath, color);
+                        }
+                    } catch (Exception e) {
+                        Log.e("MainActivity", "Background caching failed for: " + song.songTitle);
+                    }
+                    
+                    // Small delay to prevent CPU spike and keep app smooth
+                    try { Thread.sleep(50); } catch (InterruptedException ignored) {}
+                }
+            }
+            Log.d("MainActivity", "Master Color Cache pre-fetching completed.");
         });
     }
 
@@ -332,6 +387,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void handleBackAction() {
+        // FLICKER FIX: Animate to the default red color (#9D201A) 
+        // to maintain list theme continuity when closing the full player.
         animateStatusBarColor(Color.parseColor("#9D201A"));
         closePlayerLayout();
         updateMiniPlayer();
@@ -368,6 +425,16 @@ public class MainActivity extends AppCompatActivity {
         if (current != null) {
             miniPlayerText.setText(current.songTitle);
             miniPlayer.setVisibility(VISIBLE);
+            
+            // MASTER CACHE CHECK: Try to apply cached color immediately for zero-lag switching
+            int cachedColor = FavoritesDatabase.getInstance(this).getCachedColor(current.songPath);
+            if (cachedColor != 0) {
+                applyDynamicColorsToUI(cachedColor);
+                Log.d("MainActivity", "Applied cached color for: " + current.songTitle);
+            }
+            // FLICKER FIX: Removed the immediate "else" reset to default red.
+            // Keeping the current color until a new one is found prevents the "red flash" during transitions.
+            
             updateMiniProfileImage(current);
             if (PlayList_Fragment.mediaPlayer != null) {
                 miniProgressBar.setMax(PlayList_Fragment.mediaPlayer.getDuration());
@@ -426,9 +493,19 @@ public class MainActivity extends AppCompatActivity {
                 if (resource instanceof BitmapDrawable) {
                     Bitmap bitmap = ((BitmapDrawable) resource).getBitmap();
                     if (bitmap != null) {
-                        Palette.from(bitmap).setRegion(bitmap.getWidth()/4, bitmap.getHeight()/4, (3*bitmap.getWidth())/4, (3*bitmap.getHeight())/4).generate(palette -> {
-                            if (palette != null) applyDynamicColorsToUI(extractBestColor(palette));
-                        });
+                        // CACHE-FIRST RULE: Only extract color if not already in database
+                        if (FavoritesDatabase.getInstance(MainActivity.this).getCachedColor(song.songPath) == 0) {
+                            Palette.from(bitmap).setRegion(bitmap.getWidth()/4, bitmap.getHeight()/4, (3*bitmap.getWidth())/4, (3*bitmap.getHeight())/4).generate(palette -> {
+                                if (palette != null) {
+                                    int color = extractBestColor(palette);
+                                    applyDynamicColorsToUI(color);
+                                    // Save to Master Cache for future instant loads
+                                    FavoritesDatabase.getInstance(MainActivity.this).saveColor(song.songPath, color);
+                                }
+                            });
+                        } else {
+                            Log.d("MainActivity", "Skipping Palette extraction, color already cached for: " + song.songTitle);
+                        }
                     }
                 }
             }

@@ -12,7 +12,7 @@ import java.util.Objects;
 public class FavoritesDatabase extends SQLiteOpenHelper {
 
     private static final String DATABASE_NAME = "favorites.db";
-    private static final int DATABASE_VERSION = 4; // Incremented for songs cache table
+    private static final int DATABASE_VERSION = 5; // Incremented for color cache table
     private static final String TABLE_FAVORITES = "favorites";
     private static final String COLUMN_ID = "id";
     private static final String COLUMN_PATH = "path";
@@ -30,6 +30,10 @@ public class FavoritesDatabase extends SQLiteOpenHelper {
     private static final String TABLE_LYRICS = "lyrics_cache";
     private static final String COLUMN_LYRICS_PLAIN = "plain_lyrics";
     private static final String COLUMN_LYRICS_SYNCED = "synced_lyrics";
+
+    // Color Cache Table
+    private static final String TABLE_COLOR_CACHE = "color_cache";
+    private static final String COLUMN_COLOR = "dominant_color";
 
     public static ArrayList<musicList_Structure> favoriteList = new ArrayList<>();
     private static FavoritesDatabase instance;
@@ -75,6 +79,12 @@ public class FavoritesDatabase extends SQLiteOpenHelper {
                 COLUMN_ALPHABET_HEADER + " TEXT, " +
                 COLUMN_SHOW_HEADER + " INTEGER)";
         db.execSQL(createSongsCacheTable);
+
+        String createColorCacheTable = "CREATE TABLE " + TABLE_COLOR_CACHE + " (" +
+                COLUMN_ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                COLUMN_PATH + " TEXT UNIQUE, " +
+                COLUMN_COLOR + " INTEGER)";
+        db.execSQL(createColorCacheTable);
     }
 
     @Override
@@ -98,6 +108,13 @@ public class FavoritesDatabase extends SQLiteOpenHelper {
                     COLUMN_ALPHABET_HEADER + " TEXT, " +
                     COLUMN_SHOW_HEADER + " INTEGER)";
             db.execSQL(createSongsCacheTable);
+        }
+        if (oldVersion < 5) {
+            String createColorCacheTable = "CREATE TABLE " + TABLE_COLOR_CACHE + " (" +
+                    COLUMN_ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                    COLUMN_PATH + " TEXT UNIQUE, " +
+                    COLUMN_COLOR + " INTEGER)";
+            db.execSQL(createColorCacheTable);
         }
     }
 
@@ -234,6 +251,47 @@ public class FavoritesDatabase extends SQLiteOpenHelper {
         try (SQLiteDatabase db = this.getWritableDatabase()) {
             db.delete(TABLE_LYRICS, COLUMN_PATH + "=?", new String[]{path});
         }
+    }
+
+    /**
+     * Caches the dominant color of a song's album art.
+     * Uses REPLACE conflict strategy to update existing values.
+     * 
+     * @param path The path of the song file.
+     * @param color The extracted dominant color as an integer.
+     * 
+     * Uses: SQLite background write, Color persistence.
+     */
+    public void saveColor(String path, int color) {
+        try (SQLiteDatabase db = this.getWritableDatabase()) {
+            ContentValues values = new ContentValues();
+            values.put(COLUMN_PATH, path);
+            values.put(COLUMN_COLOR, color);
+            db.insertWithOnConflict(TABLE_COLOR_CACHE, null, values, SQLiteDatabase.CONFLICT_REPLACE);
+        } catch (Exception e) {
+            android.util.Log.e("FavoritesDatabase", "Error saving cached color", e);
+        }
+    }
+
+    /**
+     * Retrieves the cached dominant color for a song.
+     * 
+     * @param path The path of the song file.
+     * @return The cached color integer, or 0 if not found.
+     * 
+     * Uses: SQLite background read, Instant UI retrieval.
+     */
+    public int getCachedColor(String path) {
+        try (SQLiteDatabase db = this.getReadableDatabase();
+             Cursor cursor = db.query(TABLE_COLOR_CACHE, new String[]{COLUMN_COLOR},
+                     COLUMN_PATH + "=?", new String[]{path}, null, null, null)) {
+            if (cursor.moveToFirst()) {
+                return cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_COLOR));
+            }
+        } catch (Exception e) {
+            android.util.Log.e("FavoritesDatabase", "Error fetching cached color", e);
+        }
+        return 0;
     }
 
     public boolean isFavorite(String path) {
