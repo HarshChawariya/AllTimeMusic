@@ -637,6 +637,21 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
     }
 
     private void addNewLineDialog(int index, String initialText) {
+        // Fetch current playback position for the new lyric line
+        int currentPos = 0;
+        if (PlayList_Fragment.mediaPlayer != null) {
+            try {
+                currentPos = PlayList_Fragment.mediaPlayer.getCurrentPosition();
+            } catch (IllegalStateException e) {
+                // Fallback to seekbar if player is in weird state
+                currentPos = seekBar.getProgress();
+            }
+        } else {
+            currentPos = seekBar.getProgress();
+        }
+
+        final int finalTimestamp = currentPos;
+
         saveStateToUndo();
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle(getString(R.string.add_lyric_line_dialog));
@@ -651,14 +666,32 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
         builder.setPositiveButton(getString(R.string.add_btn), (dialog, which) -> {
             String newText = input.getText().toString().trim();
             if (!newText.isEmpty()) {
-                lyricLines.add(index, new LyricLine(0, newText));
+                // DUPLICATE PREVENTION: Check if a line already exists at this exact timestamp
+                for (LyricLine line : lyricLines) {
+                    if (line.getTimeMs() == finalTimestamp) {
+                        Toast.makeText(SyncedLyricsEditorActivity.this, "Lyrics Already Exists At This Timestamp!", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                }
+
+                // Add new lyric line with the captured timestamp
+                LyricLine newLine = new LyricLine(finalTimestamp, newText);
+                lyricLines.add(index, newLine);
                 
+                // CONDITIONAL SORTING: Only sort automatically if we are in Synced mode.
+                if (isEditingSynced) {
+                    lyricLines.sort(Comparator.comparingLong(LyricLine::getTimeMs));
+                }
+
                 // SYNC FIX: Use DiffUtil-powered setter instead of manual notifications
                 // to prevent list mismatch and ensure immediate visibility.
                 adapter.setLyrics(lyricLines);
                 
                 // UI FIX: Instantly highlight and scroll to the new line
-                selectLine(index);
+                int newIndex = lyricLines.indexOf(newLine);
+                if (newIndex != -1) {
+                    selectLine(newIndex);
+                }
 
                 /*
                 // Manual notifications removed in favor of DiffUtil consistency
