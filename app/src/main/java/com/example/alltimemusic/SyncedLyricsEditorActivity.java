@@ -36,7 +36,7 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
     private RecyclerView recyclerView;
     private EditorLyricsAdapter adapter;
     private final List<LyricLine> lyricLines = new ArrayList<>();
-    private TextView currentLineDisplay, currentTimeTxt;
+    private TextView currentLineDisplay, currentTimeTxt, waveformTimeTxt;
     private SeekBar seekBar;
     private ImageView playPauseBtn, previewBtn, btnUndo, btnRedo;
     private Button btnSetTimestamp;
@@ -46,6 +46,7 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
     private int selectedIndex = -1;
     private boolean isPreviewMode = false;
     private boolean isEditingSynced = true; // Priority: Synced by default
+    private int totalDuration = 0; // Cached duration for reliable UI updates
 
     // SHARED FLAG: Tell MainActivity/Fragments to refresh lyrics when user returns
     public static boolean shouldRefreshOnReturn = false;
@@ -61,10 +62,13 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
                 try {
                     int currentPos = PlayList_Fragment.mediaPlayer.getCurrentPosition();
                     int duration = PlayList_Fragment.mediaPlayer.getDuration();
+                    totalDuration = duration; // Sync cached duration
                     
                     if (duration > 0) {
                         seekBar.setProgress(currentPos);
-                        currentTimeTxt.setText(formatTime(currentPos));
+                        
+                        // SYNC FIX: Update both standard and precise centisecond displays for waveform
+                        updateTimeDisplays(currentPos, duration);
                         
                         float progress = (float) currentPos / duration;
                         waveformView.updateScroll(progress);
@@ -91,6 +95,45 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
         return String.format(Locale.US, "%02d:%02d", minutes, seconds);
     }
 
+    /**
+     * Formats milliseconds into a precise mm:ss.xx format (centiseconds).
+     * This matches the LRC synced lyrics format and is used for waveform tracking.
+     *
+     * Method Uses: Precise time display in the waveform editor for high-accuracy syncing.
+     * Method Disuses: Avoid using for general song duration labels to prevent UI clutter.
+     *
+     * @param msTotal Total milliseconds to format.
+     * @return Formatted string in "mm:ss.xx".
+     */
+    private String formatTimeMS(int msTotal) {
+        int minutes = (msTotal / 1000) / 60;
+        int seconds = (msTotal / 1000) % 60;
+        int ms = (msTotal % 1000) / 10; // Convert to centiseconds (00-99)
+        return String.format(Locale.US, "%02d:%02d.%02d", minutes, seconds, ms);
+    }
+
+    /**
+     * Synchronizes all time-related text displays in the activity.
+     * Updates both the standard seekbar timer and the precise waveform centisecond timer.
+     *
+     * Method Uses: Ensuring UI consistency during playback, manual seeking, and waveform scrolling.
+     * Method Disuses: None.
+     *
+     * @param currentPos Current playback position in ms.
+     * @param duration   Total duration of the audio in ms.
+     */
+    private void updateTimeDisplays(int currentPos, int duration) {
+        if (currentTimeTxt != null) {
+            currentTimeTxt.setText(formatTime(currentPos));
+        }
+
+        if (waveformTimeTxt != null && duration > 0) {
+            // Display current time and total duration in precise centisecond format
+            String timeStr = formatTimeMS(currentPos) + " / " + formatTimeMS(duration);
+            waveformTimeTxt.setText(timeStr);
+        }
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -100,6 +143,7 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
         recyclerView = findViewById(R.id.lyrics_edit_recycler);
         currentLineDisplay = findViewById(R.id.current_line_display);
         currentTimeTxt = findViewById(R.id.editor_current_time);
+        waveformTimeTxt = findViewById(R.id.waveform_time_display);
         TextView totalDurationTxt = findViewById(R.id.editor_total_duration);
         seekBar = findViewById(R.id.editor_seekbar);
         playPauseBtn = findViewById(R.id.editor_play_pause);
@@ -151,9 +195,10 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
                         
                         // Rule: Sync all UI components immediately
                         seekBar.setProgress(time);
-                        currentTimeTxt.setText(formatTime(time));
                         
-                        int duration = PlayList_Fragment.mediaPlayer.getDuration();
+                        int duration = totalDuration > 0 ? totalDuration : PlayList_Fragment.mediaPlayer.getDuration();
+                        updateTimeDisplays(time, duration);
+
                         if (duration > 0) {
                             waveformView.updateScroll((float) time / duration);
                         }
@@ -282,9 +327,17 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
 
         // Setup Media Player Sync
         if (PlayList_Fragment.mediaPlayer != null) {
-            int duration = PlayList_Fragment.mediaPlayer.getDuration();
-            seekBar.setMax(duration);
-            totalDurationTxt.setText(formatTime(duration));
+            try {
+                totalDuration = PlayList_Fragment.mediaPlayer.getDuration();
+                int currentPos = PlayList_Fragment.mediaPlayer.getCurrentPosition();
+                seekBar.setMax(totalDuration);
+                totalDurationTxt.setText(formatTime(totalDuration));
+                
+                // Initial sync for time displays
+                updateTimeDisplays(currentPos, totalDuration);
+            } catch (Exception e) {
+                // Player might not be ready
+            }
             updatePauseIcon();
         }
 
@@ -293,14 +346,21 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
             @Override
             public void onWaveformScroll(float progress) {
                 if (PlayList_Fragment.mediaPlayer != null) {
-                    int duration = PlayList_Fragment.mediaPlayer.getDuration();
-                    int newPos = (int) (progress * duration);
-                    PlayList_Fragment.mediaPlayer.seekTo(newPos);
-                    seekBar.setProgress(newPos);
-                    currentTimeTxt.setText(formatTime(newPos));
-                    
-                    if (isPreviewMode) {
-                        updatePreviewLyrics(newPos);
+                    // Use cached duration if possible for better performance and stability
+                    int duration = totalDuration > 0 ? totalDuration : PlayList_Fragment.mediaPlayer.getDuration();
+                    if (duration > 0) {
+                        totalDuration = duration;
+                        int newPos = (int) (progress * duration);
+                        PlayList_Fragment.mediaPlayer.seekTo(newPos);
+                        seekBar.setProgress(newPos);
+                        
+                        // Precise sync for waveform time text during scrolling using formatTimeMS
+                        // This ensures time updates even when the player is paused
+                        updateTimeDisplays(newPos, duration);
+                        
+                        if (isPreviewMode) {
+                            updatePreviewLyrics(newPos);
+                        }
                     }
                 }
             }
@@ -424,11 +484,12 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 if (fromUser && PlayList_Fragment.mediaPlayer != null) {
                     PlayList_Fragment.mediaPlayer.seekTo(progress);
-                    currentTimeTxt.setText(formatTime(progress));
                     
-                    // Rule: Sync waves with seekbar sliding
-                    int duration = PlayList_Fragment.mediaPlayer.getDuration();
+                    // Rule: Sync waves and precise timers with seekbar sliding
+                    int duration = totalDuration > 0 ? totalDuration : PlayList_Fragment.mediaPlayer.getDuration();
                     if (duration > 0) {
+                        totalDuration = duration;
+                        updateTimeDisplays(progress, duration);
                         float waveProgress = (float) progress / duration;
                         waveformView.updateScroll(waveProgress);
                     }
@@ -776,7 +837,13 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
                     runOnUiThread(() -> {
                         waveformView.setAmplitudes(finalPeaks);
                         loadingLayout.setVisibility(View.GONE);
-                        if (centerLine != null) centerLine.setVisibility(View.VISIBLE);
+                        if (centerLine != null) {
+                            centerLine.setVisibility(View.VISIBLE);
+                        }
+                        // UI FEATURE: Show waveform time display once waveform is ready
+                        if (waveformTimeTxt != null) {
+                            waveformTimeTxt.setVisibility(View.VISIBLE);
+                        }
                     });
                 }, exception -> {
                     exception.printStackTrace();

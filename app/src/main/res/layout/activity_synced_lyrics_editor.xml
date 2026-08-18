@@ -62,6 +62,19 @@
             android:background="#FF0000"
             android:visibility="gone" />
 
+        <!-- Waveform Time Overlay: Displays current time and total duration under the red line -->
+        <TextView
+            android:id="@+id/waveform_time_display"
+            android:layout_width="120dp"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|center_horizontal"
+            android:gravity="center"
+            android:background="@drawable/waveform_time_bg"
+            android:text="00:00.0 / 00:00.0"
+            android:textColor="@color/white"
+            android:textSize="10sp"
+            android:visibility="gone" />
+
         <!-- Loading Overlay -->
         <LinearLayout
             android:id="@+id/waveform_loading_layout"

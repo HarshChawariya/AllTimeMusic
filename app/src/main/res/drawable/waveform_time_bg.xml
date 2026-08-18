@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Semi-transparent black background -->
+    <solid android:color="#FF0000" />
+    <!-- Rounded corners for a modern professional look -->
+    <corners android:radius="12dp" />
+    <!-- Subtle padding to prevent text from touching edges -->
+    <padding
+        android:left="8dp"
+        android:right="8dp"
+        android:top="2dp"
+        android:bottom="2dp" />
+</shape>
