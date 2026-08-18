@@ -42,8 +42,9 @@ public class EditorLyricsAdapter extends RecyclerView.Adapter<EditorLyricsAdapte
 
             @Override
             public boolean areItemsTheSame(int oldItemPosition, int newItemPosition) {
-                // Same logic as LyricsAdapter
-                return lyrics.get(oldItemPosition).getTimeMs() == newLyrics.get(newItemPosition).getTimeMs();
+                // BUG FIX: Compare object references to ensure DiffUtil detects individual items 
+                // even if they have identical text and timestamp (common for musical notes).
+                return lyrics.get(oldItemPosition) == newLyrics.get(newItemPosition);
             }
 
             @Override
