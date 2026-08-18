@@ -606,7 +606,9 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle(getString(R.string.add_lyric_line_dialog));
         
-        final EditText input = new EditText(this);
+        // UI FIX: Use the themed context from the builder to prevent styling warnings and leaks instead "this"
+        //final EditText input = new EditText(this);
+        final EditText input = new EditText(builder.getContext());
         input.setText(initialText);
         input.setPadding(40, 40, 40, 40);
         builder.setView(input);
@@ -615,8 +617,19 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
             String newText = input.getText().toString().trim();
             if (!newText.isEmpty()) {
                 lyricLines.add(index, new LyricLine(0, newText));
-                adapter.notifyItemInserted(index);
-                adapter.notifyItemRangeChanged(index, lyricLines.size());
+                
+                // SYNC FIX: Use DiffUtil-powered setter instead of manual notifications
+                // to prevent list mismatch and ensure immediate visibility.
+                adapter.setLyrics(lyricLines);
+                
+                // UI FIX: Instantly highlight and scroll to the new line
+                selectLine(index);
+
+                /*
+                // Manual notifications removed in favor of DiffUtil consistency
+                // adapter.notifyItemInserted(index);
+                // adapter.notifyItemRangeChanged(index, lyricLines.size());
+                */
             }
         });
         builder.setNegativeButton(getString(R.string.cancel_btn), (dialog, which) -> dialog.cancel());
