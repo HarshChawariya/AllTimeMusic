@@ -3,6 +3,7 @@ package com.example.alltimemusic;
 import android.content.Context;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.os.Handler;
@@ -672,6 +673,8 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
 
     private void showEditDialog(int index) {
         saveStateToUndo();
+        
+        /*
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle(getString(R.string.edit_lyric_line_dialog));
         
@@ -695,6 +698,55 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
         });
         builder.setNegativeButton(getString(R.string.cancel_btn), (dialog, which) -> dialog.cancel());
         builder.show();
+        */
+
+        // CUSTOM DIALOG: Create a themed, non-cancelable dialog for editing lyrics
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        View dialogView = getLayoutInflater().inflate(R.layout.dialog_editor_custom, null);
+        builder.setView(dialogView);
+        builder.setCancelable(false); // STICKY: Prevents dismissal on outside click
+
+        AlertDialog dialog = builder.create();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        }
+
+        TextView title = dialogView.findViewById(R.id.dialog_title);
+        EditText input = dialogView.findViewById(R.id.dialog_input);
+        Button btnCancel = dialogView.findViewById(R.id.btn_dialog_cancel);
+        Button btnSave = dialogView.findViewById(R.id.btn_dialog_action);
+
+        title.setText(getString(R.string.edit_lyric_line_dialog));
+        title.setTextColor(MainActivity.lastDynamicColor);
+        btnSave.setBackgroundTintList(ColorStateList.valueOf(MainActivity.lastDynamicColor));
+        btnCancel.setTextColor(MainActivity.lastDynamicColor);
+
+        // DYNAMIC BG WITH BORDER: Create a rounded background with dynamic stroke
+        GradientDrawable inputBg = new GradientDrawable();
+        inputBg.setShape(GradientDrawable.RECTANGLE);
+        inputBg.setCornerRadius(dpToPx(12));
+        inputBg.setStroke(dpToPx(2.0f), MainActivity.lastDynamicColor);
+        inputBg.setColor(Color.parseColor("#F5F5F5")); // Light grey fill for better contrast
+        input.setBackground(inputBg);
+
+        input.setText(lyricLines.get(index).getText());
+
+        btnCancel.setOnClickListener(v -> dialog.dismiss());
+
+        btnSave.setOnClickListener(v -> {
+            String newText = input.getText().toString().trim();
+            if (!newText.isEmpty()) {
+                LyricLine old = lyricLines.get(index);
+                lyricLines.set(index, new LyricLine(old.getTimeMs(), newText));
+                adapter.setLyrics(lyricLines);
+                if (index == selectedIndex) currentLineDisplay.setText(newText);
+                dialog.dismiss();
+            } else {
+                Toast.makeText(this, "Lyrics cannot be empty!", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        dialog.show();
     }
 
     private void addNewLineDialog(int index, String initialText) {
@@ -704,7 +756,6 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
             try {
                 currentPos = PlayList_Fragment.mediaPlayer.getCurrentPosition();
             } catch (IllegalStateException e) {
-                // Fallback to seekbar if player is in weird state
                 currentPos = seekBar.getProgress();
             }
         } else {
@@ -712,8 +763,9 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
         }
 
         final int finalTimestamp = currentPos;
-
         saveStateToUndo();
+
+        /*
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle(getString(R.string.add_lyric_line_dialog));
         
@@ -754,15 +806,92 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
                     selectLine(newIndex);
                 }
 
+                // Manual notifications removed in favor of DiffUtil consistency
+                // adapter.notifyItemInserted(index);
+                // adapter.notifyItemRangeChanged(index, lyricLines.size());
+            }
+        });
+        builder.setNegativeButton(getString(R.string.cancel_btn), (dialog, which) -> dialog.cancel());
+        builder.show();
+        */
+
+        // CUSTOM DIALOG: Create a themed, non-cancelable dialog for adding new lyrics
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        View dialogView = getLayoutInflater().inflate(R.layout.dialog_editor_custom, null);
+        builder.setView(dialogView);
+        builder.setCancelable(false); // STICKY: Prevents dismissal on outside click
+
+        AlertDialog dialog = builder.create();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        }
+
+        TextView title = dialogView.findViewById(R.id.dialog_title);
+        EditText input = dialogView.findViewById(R.id.dialog_input);
+        Button btnCancel = dialogView.findViewById(R.id.btn_dialog_cancel);
+        Button btnAdd = dialogView.findViewById(R.id.btn_dialog_action);
+
+        title.setText(getString(R.string.add_lyric_line_dialog));
+        title.setTextColor(MainActivity.lastDynamicColor);
+        btnAdd.setBackgroundTintList(ColorStateList.valueOf(MainActivity.lastDynamicColor));
+        btnAdd.setText(getString(R.string.add_btn));
+        btnCancel.setTextColor(MainActivity.lastDynamicColor);
+
+        // DYNAMIC BG WITH BORDER: Create a rounded background with dynamic stroke
+        GradientDrawable inputBg = new GradientDrawable();
+        inputBg.setShape(GradientDrawable.RECTANGLE);
+        inputBg.setCornerRadius(dpToPx(12));
+        inputBg.setStroke(dpToPx(2.0f), MainActivity.lastDynamicColor);
+        inputBg.setColor(Color.parseColor("#F5F5F5")); // Light grey fill
+        input.setBackground(inputBg);
+
+        input.setText(initialText);
+
+        btnCancel.setOnClickListener(v -> dialog.dismiss());
+
+        btnAdd.setOnClickListener(v -> {
+            String newText = input.getText().toString().trim();
+            if (!newText.isEmpty()) {
+                // DUPLICATE PREVENTION: Check if a line already exists at this exact timestamp
+                for (LyricLine line : lyricLines) {
+                    if (line.getTimeMs() == finalTimestamp) {
+                        Toast.makeText(SyncedLyricsEditorActivity.this, "Lyrics Already Exists At This Timestamp!", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                }
+
+                // Add new lyric line with the captured timestamp
+                LyricLine newLine = new LyricLine(finalTimestamp, newText);
+                lyricLines.add(index, newLine);
+                
+                // CONDITIONAL SORTING: Only sort automatically if we are in Synced mode.
+                if (isEditingSynced) {
+                    lyricLines.sort(Comparator.comparingLong(LyricLine::getTimeMs));
+                }
+
+                // SYNC FIX: Use DiffUtil-powered setter instead of manual notifications
+                // to prevent list mismatch and ensure immediate visibility.
+                adapter.setLyrics(lyricLines);
+                
+                // UI FIX: Instantly highlight and scroll to the new line
+                int newIndex = lyricLines.indexOf(newLine);
+                if (newIndex != -1) {
+                    selectLine(newIndex);
+                }
+                dialog.dismiss();
+
                 /*
                 // Manual notifications removed in favor of DiffUtil consistency
                 // adapter.notifyItemInserted(index);
                 // adapter.notifyItemRangeChanged(index, lyricLines.size());
                 */
+
+            } else {
+                Toast.makeText(this, "Lyrics cannot be empty!", Toast.LENGTH_SHORT).show();
             }
         });
-        builder.setNegativeButton(getString(R.string.cancel_btn), (dialog, which) -> dialog.cancel());
-        builder.show();
+
+        dialog.show();
     }
 
     private void saveStateToUndo() {
@@ -896,6 +1025,16 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
             if (showToast)
                 Toast.makeText(this, getString(R.string.lyrics_synced_saved), Toast.LENGTH_SHORT).show();
 
+    }
+
+    /**
+     * Converts density-independent pixels (dp) to screen pixels (px).
+     *
+     * @param dp The value in dp.
+     * @return The equivalent value in px.
+     */
+    private int dpToPx(float dp) {
+        return (int) (dp * getResources().getDisplayMetrics().density);
     }
 
     @Override
