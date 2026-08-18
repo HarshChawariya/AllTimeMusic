@@ -47,6 +47,9 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
     private boolean isPreviewMode = false;
     private boolean isEditingSynced = true; // Priority: Synced by default
 
+    // SHARED FLAG: Tell MainActivity/Fragments to refresh lyrics when user returns
+    public static boolean shouldRefreshOnReturn = false;
+
     private final Stack<List<LyricLine>> undoStack = new Stack<>();
     private final Stack<List<LyricLine>> redoStack = new Stack<>();
 
@@ -397,6 +400,11 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
         btnSave.setOnClickListener(v -> {
             saveToDatabase(true);
             
+            // MASTER SYNC FIX: Set a shared flag so Fragments know to refresh when they become active again.
+            // This flag is consumed by Lyrics_Fragment.onResume() to trigger a fresh database fetch.
+            shouldRefreshOnReturn = true;
+
+            /*
             // BUG FIX: Instant Refresh in Fragments
             // This is a critical step to notify Fragments about data change
             for (androidx.fragment.app.Fragment fragment : getSupportFragmentManager().getFragments()) {
@@ -406,6 +414,7 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
             }
             // If they are static fragments in activity, we might need a more direct call or callback
             // Since I cannot modify MainActivity easily here, I'll rely on common fragment access.
+            */
         });
 
         optionsMenuBtn.setOnClickListener(this::showOptionsMenu);
@@ -782,6 +791,7 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
         }
 
         FavoritesDatabase db = FavoritesDatabase.getInstance(this);
+        // UI FEEDBACK: Show confirmation toast if requested
             db.saveLyrics(currentSong.songPath, null, syncedBuilder.toString());
             if (showToast)
                 Toast.makeText(this, getString(R.string.lyrics_synced_saved), Toast.LENGTH_SHORT).show();

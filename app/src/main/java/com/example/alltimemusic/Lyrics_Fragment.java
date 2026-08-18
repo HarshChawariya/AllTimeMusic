@@ -125,6 +125,19 @@ public class Lyrics_Fragment extends Fragment {
     }
 
     @Override
+    public void onResume() {
+        super.onResume();
+        // MASTER SYNC FIX: Ensure lyrics are re-fetched from database if they were updated in the Editor.
+        // This resolves the bug where old lyrics continued to show after editing.
+        if (SyncedLyricsEditorActivity.shouldRefreshOnReturn) {
+            SyncedLyricsEditorActivity.shouldRefreshOnReturn = false; // Reset the global signal flag
+            lastLoadedSongId = ""; // Clear cached ID to force a fresh database fetch
+            updateLyricsSync();
+            Log.d("Lyrics_Fragment", "Force refreshed lyrics from database after Editor return.");
+        }
+    }
+
+    @Override
     public void onDestroy() {
         super.onDestroy();
         lyricsHandler.removeCallbacks(lyricsRunnable);
