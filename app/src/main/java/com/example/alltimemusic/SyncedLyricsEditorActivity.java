@@ -23,6 +23,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -195,11 +196,56 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
 
             @Override
             public void onAddMusicNoteAfter(int position) {
+
+                // Fetch current playback position for the musical note
+                int currentPos = 0;
+                if (PlayList_Fragment.mediaPlayer != null) {
+                    try {
+                        currentPos = PlayList_Fragment.mediaPlayer.getCurrentPosition();
+                    } catch (IllegalStateException e) {
+                        // Fallback to seekbar if player is in weird state
+                        currentPos = seekBar.getProgress();
+                    }
+                } else {
+                    currentPos = seekBar.getProgress();
+                }
+
+                // DUPLICATE PREVENTION: Check if a note/line already exists at this exact timestamp
+                for (LyricLine line : lyricLines) {
+                    if (line.getTimeMs() == currentPos) {
+                        Toast.makeText(SyncedLyricsEditorActivity.this, "MusicalNote Already Exist", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                }
+
+                // Add single music note (♪) with current timestamp between lines
+                saveStateToUndo();
+                LyricLine noteLine = new LyricLine(currentPos, "♪");
+                lyricLines.add(position + 1, noteLine);
+
+                // AUTOMATIC SORTING: Sort the list by timestamp to maintain chronological LRC order
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                    lyricLines.sort((a, b) -> Long.compare(a.getTimeMs(), b.getTimeMs()));
+                } else {
+                    Collections.sort(lyricLines, (a, b) -> Long.compare(a.getTimeMs(), b.getTimeMs()));
+                }
+
+                // REFRESH ADAPTER: Sync activity list with adapter's internal copy via DiffUtil
+                adapter.setLyrics(lyricLines);
+
+                // UI SYNC: Find the new index after sorting and highlight it
+                int newIndex = lyricLines.indexOf(noteLine);
+                if (newIndex != -1) {
+                    selectLine(newIndex);
+                }
+
+                /*
                 // Add single music note (♪) between lines
                 saveStateToUndo();
                 lyricLines.add(position + 1, new LyricLine(0, "♪"));
                 adapter.notifyItemInserted(position + 1);
                 adapter.notifyItemRangeChanged(position + 1, lyricLines.size());
+                */
             }
 
             @Override
