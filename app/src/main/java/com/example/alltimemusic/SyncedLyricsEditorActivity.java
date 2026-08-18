@@ -183,9 +183,22 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
                 }
 
                 lyricLines.remove(position);
-                adapter.notifyItemRemoved(position);
-                adapter.notifyItemRangeChanged(position, lyricLines.size());
+                
+                // SYNC FIX: Update adapter internal list via DiffUtil for clean animation
+                adapter.setLyrics(lyricLines);
+                
+                // UI RECOVERY: If a different line was selected, ensure it stays highlighted
+                if (selectedIndex != -1 && selectedIndex < lyricLines.size()) {
+                    selectLine(selectedIndex);
+                }
+
                 Toast.makeText(SyncedLyricsEditorActivity.this, getString(R.string.line_deleted_toast), Toast.LENGTH_SHORT).show();
+
+                /*
+                // Manual notifications removed in favor of DiffUtil consistency
+                // adapter.notifyItemRemoved(position);
+                // adapter.notifyItemRangeChanged(position, lyricLines.size());
+                */
             }
 
             @Override

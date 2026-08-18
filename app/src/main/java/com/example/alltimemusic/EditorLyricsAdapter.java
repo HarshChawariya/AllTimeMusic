@@ -108,28 +108,40 @@ public class EditorLyricsAdapter extends RecyclerView.Adapter<EditorLyricsAdapte
         }
 
         holder.itemView.setOnClickListener(v -> {
+            int currentIdx = holder.getBindingAdapterPosition();
+            if (currentIdx == RecyclerView.NO_POSITION) return;
+            
             long clickTime = System.currentTimeMillis();
             if (clickTime - lastClickTime < DOUBLE_CLICK_TIME_DELTA) {
                 // Double Click: Edit Line
-                if (listener != null) listener.onEditLine(position);
+                if (listener != null) listener.onEditLine(currentIdx);
             } else {
                 // Single Click: Select/Seek
-                if (listener != null) listener.onLyricClick(position, line);
+                if (listener != null) listener.onLyricClick(currentIdx, lyrics.get(currentIdx));
             }
             lastClickTime = clickTime;
         });
 
         holder.itemView.setOnLongClickListener(v -> {
-            if (listener != null) listener.onDeleteLine(position);
+            int currentIdx = holder.getBindingAdapterPosition();
+            if (currentIdx != RecyclerView.NO_POSITION && listener != null) {
+                listener.onDeleteLine(currentIdx);
+            }
             return true;
         });
 
         holder.addNoteBtn.setOnClickListener(v -> {
-            if (listener != null) listener.onAddMusicNoteAfter(position);
+            int currentIdx = holder.getBindingAdapterPosition();
+            if (currentIdx != RecyclerView.NO_POSITION && listener != null) {
+                listener.onAddMusicNoteAfter(currentIdx);
+            }
         });
 
         holder.addLineBtn.setOnClickListener(v -> {
-            if (listener != null) listener.onAddLineAfter(position);
+            int currentIdx = holder.getBindingAdapterPosition();
+            if (currentIdx != RecyclerView.NO_POSITION && listener != null) {
+                listener.onAddLineAfter(currentIdx);
+            }
         });
     }
 
