@@ -23,7 +23,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -236,17 +236,25 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
                 LyricLine noteLine = new LyricLine(currentPos, "♪");
                 lyricLines.add(position + 1, noteLine);
 
-                // AUTOMATIC SORTING: Sort the list by timestamp to maintain chronological LRC order
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
-                    lyricLines.sort((a, b) -> Long.compare(a.getTimeMs(), b.getTimeMs()));
-                } else {
-                    Collections.sort(lyricLines, (a, b) -> Long.compare(a.getTimeMs(), b.getTimeMs()));
+                // CONDITIONAL SORTING: Only sort automatically if we are in Synced mode.
+                // For Plain lyrics, we keep the order as-is so the user can set timestamps sequentially.
+                if (isEditingSynced) {
+                    /*
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                        lyricLines.sort((a, b) -> Long.compare(a.getTimeMs(), b.getTimeMs()));
+                    } else {
+                        Collections.sort(lyricLines, (a, b) -> Long.compare(a.getTimeMs(), b.getTimeMs()));
+                    }
+                    */
+                    
+                    // MODERN SORTING: Use Comparator for a cleaner, warning-free implementation
+                    lyricLines.sort(Comparator.comparingLong(LyricLine::getTimeMs));
                 }
 
                 // REFRESH ADAPTER: Sync activity list with adapter's internal copy via DiffUtil
                 adapter.setLyrics(lyricLines);
 
-                // UI SYNC: Find the new index after sorting and highlight it
+                // UI SYNC: Find the new index and highlight it
                 int newIndex = lyricLines.indexOf(noteLine);
                 if (newIndex != -1) {
                     selectLine(newIndex);
@@ -352,7 +360,8 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
                         new Handler().postDelayed(() -> selectLine(selectedIndex + 1), 300);
                     }
                 }
-                adapter.notifyItemChanged(selectedIndex);
+                // SYNC FIX: Ensure adapter internal list is updated via DiffUtil
+                adapter.setLyrics(lyricLines);
             } else {
                 Toast.makeText(this, "Please! Select Any Line", Toast.LENGTH_SHORT).show();
             }
@@ -596,7 +605,8 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle(getString(R.string.edit_lyric_line_dialog));
         
-        final EditText input = new EditText(this);
+        // UI FIX: Use the themed context from the builder to prevent styling warnings and leaks
+        final EditText input = new EditText(builder.getContext());
         input.setText(lyricLines.get(index).getText());
         input.setPadding(40, 40, 40, 40);
         builder.setView(input);
@@ -606,7 +616,10 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
             if (!newText.isEmpty()) {
                 LyricLine old = lyricLines.get(index);
                 lyricLines.set(index, new LyricLine(old.getTimeMs(), newText));
-                adapter.notifyItemChanged(index);
+                
+                // SYNC FIX: Update adapter internal list via DiffUtil
+                adapter.setLyrics(lyricLines);
+
                 if (index == selectedIndex) currentLineDisplay.setText(newText);
             }
         });
@@ -739,6 +752,24 @@ public class SyncedLyricsEditorActivity extends AppCompatActivity {
     }
 
     private void saveToDatabase(boolean showToast) {
+        // MASTER PLAN: Sort lyrics by timestamp before saving ONLY if editing Synced lyrics.
+        // For Plain lyrics, sorting would mess up the user's sequential timestamp setting process.
+        if (isEditingSynced) {
+            /*
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                lyricLines.sort((a, b) -> Long.compare(a.getTimeMs(), b.getTimeMs()));
+            } else {
+                Collections.sort(lyricLines, (a, b) -> Long.compare(a.getTimeMs(), b.getTimeMs()));
+            }
+            */
+            
+            // MODERN SORTING: Efficient, warning-free chronological sorting
+            lyricLines.sort(Comparator.comparingLong(LyricLine::getTimeMs));
+
+            // Update adapter after sorting for visual consistency
+            adapter.setLyrics(lyricLines);
+        }
+
         StringBuilder syncedBuilder = new StringBuilder();
         for (LyricLine line : lyricLines) {
             long time = line.getTimeMs();
