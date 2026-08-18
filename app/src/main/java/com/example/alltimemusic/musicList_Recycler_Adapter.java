@@ -1,9 +1,12 @@
 package com.example.alltimemusic;
 
 import android.annotation.SuppressLint;
+import android.content.ContentUris;
 import android.content.Context;
 import android.graphics.Color;
 
+import android.graphics.drawable.Drawable;
+import android.net.Uri;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -14,11 +17,15 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
+import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.bumptech.glide.load.resource.bitmap.CenterCrop;
+import com.bumptech.glide.request.target.CustomTarget;
+import com.bumptech.glide.request.transition.Transition;
 import com.google.android.material.imageview.ShapeableImageView;
 
 import java.util.ArrayList;
@@ -141,7 +148,7 @@ public class musicList_Recycler_Adapter extends RecyclerView.Adapter<musicList_R
                     
                     if (PlayList_Fragment.mediaPlayer != null && PlayList_Fragment.mediaPlayer.isPlaying()) {
                         PlayList_Fragment.arrPlayNext.add(selectedSong);
-                        Toast.makeText(context, context.getString(R.string.playing_next_turn, selectedSong.songTitle), Toast.LENGTH_SHORT).show();
+                        Toast.makeText(context, context.getString(R.string.playing_next_turn), Toast.LENGTH_SHORT).show();
                     } else {
                         currentItem = selectedSong;
                         currentPosition = currentIdx;
@@ -155,7 +162,7 @@ public class musicList_Recycler_Adapter extends RecyclerView.Adapter<musicList_R
                     }
                 } else if (title.equals(context.getString(R.string.added_to_favorite)) || title.equals(context.getString(R.string.removed_from_favorite))) {
                     // Toggle favorite logic
-                    try (FavoritesDatabase db = new FavoritesDatabase(context)) {
+                    FavoritesDatabase db = FavoritesDatabase.getInstance(context);
                         if (item.isFavourite) {
                             db.removeFavorite(item.songPath);
                             item.isFavourite = false;
@@ -165,7 +172,7 @@ public class musicList_Recycler_Adapter extends RecyclerView.Adapter<musicList_R
                             item.isFavourite = true;
                             Toast.makeText(context, context.getString(R.string.added_to_favorite), Toast.LENGTH_SHORT).show();
                         }
-                    }
+
                     
                     // Update visual heart indicator
                     notifyItemChanged(holder.getBindingAdapterPosition());
@@ -256,8 +263,8 @@ public class musicList_Recycler_Adapter extends RecyclerView.Adapter<musicList_R
         imageView.setImageResource(R.drawable.profile);
         setDefaultListProfileImage(imageView); // Reset size to default first
 
-        android.net.Uri sArtworkUri = android.net.Uri.parse("content://media/external/audio/albumart");
-        android.net.Uri uri = android.content.ContentUris.withAppendedId(sArtworkUri, item.albumId);
+        Uri sArtworkUri = Uri.parse("content://media/external/audio/albumart");
+        Uri uri = ContentUris.withAppendedId(sArtworkUri, item.albumId);
 
         Glide.with(context)
                 .load(uri)
@@ -265,11 +272,11 @@ public class musicList_Recycler_Adapter extends RecyclerView.Adapter<musicList_R
                 .error(R.drawable.profile)
                 .fallback(R.drawable.profile)
                 .transform(new CenterCrop())
-                .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.ALL)
+                .diskCacheStrategy(DiskCacheStrategy.ALL)
                 .dontAnimate() // Fix flickering
-                .into(new com.bumptech.glide.request.target.CustomTarget<android.graphics.drawable.Drawable>() {
+                .into(new CustomTarget<Drawable>() {
                     @Override
-                    public void onResourceReady(@NonNull android.graphics.drawable.Drawable resource, @androidx.annotation.Nullable com.bumptech.glide.request.transition.Transition<? super android.graphics.drawable.Drawable> transition) {
+                    public void onResourceReady(@NonNull Drawable resource, @Nullable Transition<? super Drawable> transition) {
                         imageView.setImageDrawable(resource);
                         ViewGroup.LayoutParams params = imageView.getLayoutParams();
                         params.width = ViewGroup.LayoutParams.MATCH_PARENT;
@@ -278,13 +285,13 @@ public class musicList_Recycler_Adapter extends RecyclerView.Adapter<musicList_R
                     }
 
                     @Override
-                    public void onLoadCleared(@androidx.annotation.Nullable android.graphics.drawable.Drawable placeholder) {
+                    public void onLoadCleared(@Nullable Drawable placeholder) {
                         imageView.setImageDrawable(placeholder);
                         setDefaultListProfileImage(imageView);
                     }
 
                     @Override
-                    public void onLoadFailed(@androidx.annotation.Nullable android.graphics.drawable.Drawable errorDrawable) {
+                    public void onLoadFailed(@Nullable Drawable errorDrawable) {
                         setDefaultListProfileImage(imageView);
                     }
                 });

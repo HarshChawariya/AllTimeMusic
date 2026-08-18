@@ -16,9 +16,14 @@ public class LyricsAdapter extends RecyclerView.Adapter<LyricsAdapter.ViewHolder
         void onLyricClick(int timeMs);
     }
 
+    public interface OnLyricLongClickListener {
+        void onLyricLongClick(String text);
+    }
+
     private List<LyricLine> lyrics = new ArrayList<>();
     private int activeIndex = -1;
     private OnLyricClickListener clickListener;
+    private OnLyricLongClickListener longClickListener;
 
     public void setLyrics(List<LyricLine> newLyrics) {
         DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(new DiffUtil.Callback() {
@@ -54,6 +59,10 @@ public class LyricsAdapter extends RecyclerView.Adapter<LyricsAdapter.ViewHolder
         this.clickListener = listener;
     }
 
+    public void setOnLyricLongClickListener(OnLyricLongClickListener listener) {
+        this.longClickListener = listener;
+    }
+
     public void setActiveIndex(int index) {
         if (this.activeIndex != index) {
             int oldIndex = this.activeIndex;
@@ -79,6 +88,14 @@ public class LyricsAdapter extends RecyclerView.Adapter<LyricsAdapter.ViewHolder
             if (clickListener != null) {
                 clickListener.onLyricClick((int) line.getTimeMs());
             }
+        });
+
+        holder.itemView.setOnLongClickListener(v -> {
+            if (longClickListener != null) {
+                longClickListener.onLyricLongClick(line.getText());
+                return true;
+            }
+            return false;
         });
 
         if (position == activeIndex) {

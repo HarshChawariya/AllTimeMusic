@@ -9,6 +9,13 @@ public class musicList_Structure implements Serializable {
     public String artistName;
     public long albumId; // Store Album ID for high-performance Glide loading
     public boolean isFavourite = false;
+    public boolean showAlphabetHeader = false; // Cache header visibility
+    public String alphabetHeader = "";        // Cache the letter
+    private String cachedCleanArtist = null;   // Cache for scrolling performance
+
+    public void setCachedCleanArtist(String cachedCleanArtist) {
+        this.cachedCleanArtist = cachedCleanArtist;
+    }
 
     public musicList_Structure(String songTitle, String songPath, String artistName, long albumId) {
         this.songTitle = songTitle;
@@ -18,6 +25,7 @@ public class musicList_Structure implements Serializable {
     }
 
     public String getCleanArtist() {
+        if (cachedCleanArtist != null) return cachedCleanArtist;
         String artist = artistName;
         if (artist == null || artist.equalsIgnoreCase("<unknown>") || artist.equalsIgnoreCase("unknown") || artist.trim().isEmpty()) {
             String[] delims = {" _ ", " | ", " — ", " - ", " : ", " ~ "};
@@ -33,11 +41,10 @@ public class musicList_Structure implements Serializable {
         }
 
         String cleaned = internalClean(artist);
-        if (cleaned.isEmpty() || cleaned.equalsIgnoreCase("<unknown>") || cleaned.equalsIgnoreCase("unknown")) {
-            return "Unknown Artist Name";
-        }
+        cachedCleanArtist = cleaned.isEmpty() || cleaned.equalsIgnoreCase("<unknown>") || cleaned.equalsIgnoreCase("unknown") 
+                ? "Unknown Artist Name" : cleaned;
 
-        return cleaned;
+        return cachedCleanArtist;
     }
 
     private String internalClean(String input) {

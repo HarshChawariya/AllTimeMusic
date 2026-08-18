@@ -33,7 +33,7 @@
     <string name="plain_lyrics_added">Plain Lyrics Added</string>
     <string name="please_add_plain_lyrics_first">Please add plain lyrics first</string>
     <string name="play_next">Play Next</string>
-    <string name="playing_next_turn">Playing next turn: %1$s</string>
+    <string name="playing_next_turn">Playing Next Turn</string>
     <string name="plain_lyrics_menu">Plain Lyrics</string>
     <string name="synced_lyrics_menu">Synced Lyrics</string>
     <string name="synced_lyrics_editor_menu">Synced Lyrics Editor</string>
@@ -55,9 +55,7 @@
     <string name="cancel_btn">Cancel</string>
     <string name="add_lyric_line_dialog">Please! Enter Your Lyric.</string>
     <string name="add_btn">Add</string>
-    <string name="undo_successful">Undo Successful</string>
     <string name="nothing_to_undo">Nothing To Undo</string>
-    <string name="redo_successful">Redo Successful</string>
     <string name="nothing_to_redo">Nothing to Redo</string>
     <string name="lyrics_synced_saved">Lyrics Synced &amp; Saved!</string>
     <string name="error_unsupported_language">Only Hindi, English or Hinglish lyrics are allowed.</string>

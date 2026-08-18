@@ -6,38 +6,43 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.graphics.Canvas;
-import android.graphics.drawable.GradientDrawable;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Bundle;
 
 import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.palette.graphics.Palette;
 
 import android.os.Handler;
 import android.os.Looper;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
+import android.util.Log;
+import android.util.Size;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.animation.Animation;
+import android.view.animation.AnimationUtils;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import com.bumptech.glide.Glide;
-import com.bumptech.glide.load.resource.bitmap.CenterCrop;
-import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions;
 import com.google.android.material.imageview.ShapeableImageView;
 
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class PlayList_Fragment extends Fragment {
 
@@ -46,7 +51,7 @@ public class PlayList_Fragment extends Fragment {
     private TextView songTitleTextView, artist_name, textSeek1, textSeek2, syncedLyricsTxt;
     private SeekBar seekBar;
     private ImageView pause, next, previous, loopButton, favButton;
-    private static com.google.android.material.imageview.ShapeableImageView profile;
+    private ShapeableImageView profile;
     private LinearLayout rootLayout;
     private ArrayList<musicList_Structure> songs;
     public static ArrayList<musicList_Structure> arrPlayNext = new ArrayList<>();
@@ -59,11 +64,16 @@ public class PlayList_Fragment extends Fragment {
     private LinearLayout logo;
     private int position;
     public static int playingPosition = -1;
+    public static String playingSongPath = ""; // Track song by path to support different list contexts
+    private String lastLoadedArtPath = ""; // Track last loaded art to prevent flickering
     private int currentLoopMode = 0; // 0: No Loop, 1: Single Loop, 2: Playlist Loop, 3: Shuffle
     private static final String PREFS_NAME = "MusicPrefs";
     private static final String KEY_LOOP_MODE = "currentLoopMode";
+    private static final String TAG = "PlayList_Fragment";
     private long lastClickTime = 0;
     private final Handler seekBarHandler = new Handler(Looper.getMainLooper());
+    // Executor for background tasks like loading album art to prevent UI freezes
+    private final ExecutorService backgroundExecutor = Executors.newSingleThreadExecutor();
     private final Runnable seekBarRunnable = new Runnable() {
         @Override
         public void run() {
@@ -92,9 +102,20 @@ public class PlayList_Fragment extends Fragment {
     };
 
     @Override
+    public void onResume() {
+        super.onResume();
+        // ALWAYS-SYNC: Force UI update every time the fragment becomes visible to keep current song data accurate
+        syncUIWithCurrentSong();
+    }
+
+    @Override
     public void onDestroy() {
         super.onDestroy();
         seekBarHandler.removeCallbacks(seekBarRunnable);
+        // Shutdown executor to prevent memory leaks when fragment is destroyed
+        if (backgroundExecutor != null) {
+            backgroundExecutor.shutdownNow();
+        }
     }
 
     public void startSeekBarUpdate() {
@@ -106,10 +127,15 @@ public class PlayList_Fragment extends Fragment {
         songs = musicList_Recycler_Adapter.fullMusicList;
         arrPlayList = songs;
         position = musicList_Recycler_Adapter.currentPosition;
+//        if(playingPosition != position || mediaPlayer == null)
+        musicList_Structure currentSong = musicList_Recycler_Adapter.currentItem;
+        String newPath = (currentSong != null) ? currentSong.songPath : "";
 
-        if (playingPosition != position || mediaPlayer == null) {
+        // SYNC FIX: Compare by path instead of position to prevent restart when switching activities
+        if (mediaPlayer == null || !newPath.equals(playingSongPath)) {
             playSong();
         } else {
+            // Same song is already playing, just sync the UI elements
             syncUIWithCurrentSong();
         }
     }
@@ -123,7 +149,7 @@ public class PlayList_Fragment extends Fragment {
             currentSong = arrPlayList.get(position);
         }
 
-        try (FavoritesDatabase db = new FavoritesDatabase(getContext())) {
+        FavoritesDatabase db = FavoritesDatabase.getInstance(getContext());
             if (!db.isFavorite(currentSong.songPath)) {
                 db.addFavorite(currentSong);
                 currentSong.isFavourite = true;
@@ -135,7 +161,7 @@ public class PlayList_Fragment extends Fragment {
                 favButton.setImageResource(R.drawable.boder_of_heart);
                 Toast.makeText(getActivity(), getString(R.string.removed_from_favorite), Toast.LENGTH_SHORT).show();
             }
-        }
+
 
         // IMPORTANT: Immediate Position Sync to prevent crash on re-addition/removal
         if (arrPlayList != null) {
@@ -154,14 +180,16 @@ public class PlayList_Fragment extends Fragment {
                 musicList_Recycler_Adapter.currentPosition = position;
             }
         }
-
-        if (getActivity() instanceof MainActivity) {
-            ((MainActivity) getActivity()).updateMiniPlayer();
-            ((MainActivity) getActivity()).updateRecyclerViewSelection();
-        } else if (getActivity() instanceof LikedSongsActivity) {
-            ((LikedSongsActivity) getActivity()).updateMiniPlayer();
-            ((LikedSongsActivity) getActivity()).updateRecyclerViewSelection();
-        }
+        notifyActivity();
+       /*
+        *if (getActivity() instanceof MainActivity) {
+        *    ((MainActivity) getActivity()).updateMiniPlayer();
+        *    ((MainActivity) getActivity()).updateRecyclerViewSelection();
+        *} else if (getActivity() instanceof LikedSongsActivity) {
+        *    ((LikedSongsActivity) getActivity()).updateMiniPlayer();
+        *    ((LikedSongsActivity) getActivity()).updateRecyclerViewSelection();
+        *}
+        */
     }
 
     public void applyLoopMode(boolean showToast) {
@@ -212,22 +240,44 @@ public class PlayList_Fragment extends Fragment {
     }
 
     public void syncUIWithCurrentSong() {
+        // GLOBAL SYNC: Always refresh the playlist and position from the adapter before updating UI
+        PlayList_Fragment.arrPlayList = musicList_Recycler_Adapter.fullMusicList;
+        this.position = musicList_Recycler_Adapter.currentPosition;
+
         if (mediaPlayer != null && arrPlayList != null && !arrPlayList.isEmpty()) {
             // Safety Check: Ensure position is valid for the current list size
             if (position < 0 || position >= arrPlayList.size()) {
                 position = 0; // Default to first if out of bounds
             }
             
-            musicList_Structure currentSong = arrPlayList.get(position);
+            musicList_Structure currentSong = musicList_Recycler_Adapter.currentItem;
+            if (currentSong == null) {
+                currentSong = arrPlayList.get(position);
+            }
+
+            // RESET UI IMMEDIATELY to prevent "ghosting" of old metadata
             if (songTitleTextView != null) songTitleTextView.setText(currentSong.songTitle);
             if (artist_name != null) artist_name.setText(currentSong.getCleanArtist());
 
-            updateProfileImage(profile, currentSong);
+            // MASTER PLAN STEP 2: Instant Cache Access
+            // Before loading the image, check if we have a cached color to update the Activity background immediately.
+            if (getContext() != null) {
+                int cachedColor = FavoritesDatabase.getInstance(getContext()).getCachedColor(currentSong.songPath);
+                if (cachedColor != 0 && getActivity() instanceof MainActivity) {
+                    ((MainActivity) getActivity()).applyDynamicColorsToUI(cachedColor);
+                    Log.d(TAG, "Instant cached color applied for: " + currentSong.songTitle);
+                }
+            }
+
+            // SYNC STABILITY: Only re-load art if it's actually different to prevent flickering/resets
+            if (!currentSong.songPath.equals(playingSongPath)) {
+                updateProfileImage(profile, currentSong);
+            }
+
             loadSyncedLyrics(currentSong.songPath);
 
-            try (FavoritesDatabase db = new FavoritesDatabase(getContext())) {
+            FavoritesDatabase db = FavoritesDatabase.getInstance(getContext());
                 currentSong.isFavourite = db.isFavorite(currentSong.songPath);
-            }
 
             if (favButton != null) favButton.setImageResource(currentSong.isFavourite ? R.drawable.fill_heart : R.drawable.boder_of_heart);
 
@@ -258,37 +308,156 @@ public class PlayList_Fragment extends Fragment {
     private void updateProfileImage(ShapeableImageView profile_imageView, musicList_Structure song) {
         if (profile_imageView == null || song == null) return;
 
-        android.net.Uri sArtworkUri = android.net.Uri.parse("content://media/external/audio/albumart");
-        android.net.Uri uri = android.content.ContentUris.withAppendedId(sArtworkUri, song.albumId);
+        // REDUNDANCY CHECK: Prevent flickering if the same song's art is already displayed
+        // We also check if the tag matches, if not, we must load.
+        String currentTag = (String) profile_imageView.getTag();
+        String targetTag = String.valueOf(song.albumId);
+        
+        if (song.songPath != null && song.songPath.equals(lastLoadedArtPath) && targetTag.equals(currentTag)) {
+            Log.d(TAG, "Skipping art load, already displaying: " + song.songTitle);
+            return;
+        }
 
-        // Use Glide with Palette for dynamic background color extraction
-        Glide.with(this)
-                .asBitmap()
-                .load(uri)
-                .placeholder(R.drawable.profile)
-                .error(R.drawable.profile)
-                .transform(new CenterCrop())
-                .into(new com.bumptech.glide.request.target.CustomTarget<Bitmap>() {
-                    @Override
-                    public void onResourceReady(@NonNull Bitmap resource, @Nullable com.bumptech.glide.request.transition.Transition<? super Bitmap> transition) {
-                        profile_imageView.setImageBitmap(resource);
+        lastLoadedArtPath = song.songPath;
 
-                        ViewGroup.LayoutParams params = profile_imageView.getLayoutParams();
-                        params.width = ViewGroup.LayoutParams.MATCH_PARENT;
-                        params.height = ViewGroup.LayoutParams.MATCH_PARENT;
-                        profile_imageView.setLayoutParams(params);
+        // FLICKER PREVENTION:
+        // We only set the default placeholder immediately if the new song DOES NOT have album art.
+        // If it does have art, we keep the previous song's art briefly until the new one is decoded in the background.
+        // This eliminates the "jhatka" (flicker) of the red placeholder during transitions.
+        if (song.albumId <= 0) {
+            setDefaultProfileImage(profile_imageView);
+        }
+
+        // Using Native Android Method (ContentResolver) as per new requirement
+        loadAlbumArtNative(profile_imageView, song);
+    }
+
+    /**
+     * Loads album art using Native Android ContentResolver.
+     * Uses background thread to ensure smooth UI.
+     * Handles API 29+ with loadThumbnail and legacy with openInputStream.
+
+     * @param imageView The ImageView to load art into.
+     * @param song The music structure containing album ID.
+
+     * Uses: Native content loading, Background execution, Race condition prevention.
+     * Disuses: External libraries like Glide, UI thread blocking.
+     */
+    private void loadAlbumArtNative(final ShapeableImageView imageView, final musicList_Structure song) {
+        if (imageView == null || song == null) return;
+
+        // Set tag to prevent incorrect image placement if user changes songs quickly (Race Condition)
+        final String tag = String.valueOf(song.albumId);
+        imageView.setTag(tag);
+
+        if (song.albumId <= 0) {
+            Log.d(TAG, "No album ID for: " + song.songTitle);
+            setDefaultProfileImage(imageView);
+            return;
+        }
+
+        backgroundExecutor.execute(() -> {
+            Bitmap albumArt = null;
+            try {
+                if (getContext() == null) return;
+
+                // Standard URI for album art
+                Uri sArtworkUri = Uri.parse("content://media/external/audio/albumart");
+                Uri uri = ContentUris.withAppendedId(sArtworkUri, song.albumId);
+
+                Log.d(TAG, "Attempting to load art for: " + song.songTitle + " URI: " + uri);
+
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                    try {
+                        // Modern way (Android 10+)
+                        albumArt = getContext().getContentResolver().loadThumbnail(uri, new Size(800, 800), null);
+                        Log.d(TAG, "loadThumbnail success for: " + song.songTitle);
+                    } catch (Exception e) {
+                        Log.w(TAG, "loadThumbnail failed, falling back to stream for: " + song.songTitle);
                     }
+                }
 
-                    @Override
-                    public void onLoadCleared(@Nullable android.graphics.drawable.Drawable placeholder) {
-                        // Not used
+                // Fallback for all versions if albumArt is still null
+                if (albumArt == null) {
+                    try (InputStream is = getContext().getContentResolver().openInputStream(uri)) {
+                        if (is != null) {
+                            albumArt = BitmapFactory.decodeStream(is);
+                            Log.d(TAG, "decodeStream success for: " + song.songTitle);
+                        }
+                    } catch (Exception e) {
+                        Log.e(TAG, "decodeStream failed for: " + song.songTitle + " - " + e.getMessage());
                     }
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "General error loading album art natively: " + e.getMessage());
+            }
 
-                    @Override
-                    public void onLoadFailed(@Nullable android.graphics.drawable.Drawable errorDrawable) {
-                        setDefaultProfileImage(profile_imageView);
+            final Bitmap finalBitmap = albumArt;
+            if (getActivity() != null) {
+                getActivity().runOnUiThread(() -> {
+                    // Check if the tag matches to ensure this bitmap is still for the current song
+                    if (tag.equals(imageView.getTag())) {
+                        if (finalBitmap != null) {
+                            imageView.setImageBitmap(finalBitmap);
+
+                            // Set to 390dp for success load as per original design
+                            int sizeInPx = (int) (390 * getResources().getDisplayMetrics().density);
+                            ViewGroup.LayoutParams params = imageView.getLayoutParams();
+                            params.width = sizeInPx;
+                            params.height = sizeInPx;
+                            imageView.setLayoutParams(params);
+
+                            Log.d(TAG, "Bitmap set to ImageView for: " + song.songTitle);
+
+                            // MASTER CACHE IMPLEMENTATION: 
+                            // CACHE-FIRST RULE: Only extract color if not already in database to save CPU/Battery
+                            if (getContext() != null && FavoritesDatabase.getInstance(getContext()).getCachedColor(song.songPath) == 0) {
+                                Palette.from(finalBitmap)
+                                        .setRegion(finalBitmap.getWidth()/4, finalBitmap.getHeight()/4, (3*finalBitmap.getWidth())/4, (3*finalBitmap.getHeight())/4)
+                                        .generate(palette -> {
+                                            if (palette != null && getContext() != null) {
+                                                // MASTER CACHE LOGIC: Extract and adjust color
+                                                int color = 0xFF9D201A;
+                                                Palette.Swatch bestSwatch = palette.getVibrantSwatch();
+                                                if (bestSwatch == null) bestSwatch = palette.getDominantSwatch();
+                                                if (bestSwatch == null) bestSwatch = palette.getDarkVibrantSwatch();
+                                                if (bestSwatch != null) {
+                                                    int targetColor = bestSwatch.getRgb();
+                                                    // Apply HSV adjustments as per MainActivity for consistent high-quality look
+                                                    float[] hsv = new float[3];
+                                                    android.graphics.Color.colorToHSV(targetColor, hsv);
+                                                    hsv[1] = Math.min(hsv[1] * 1.3f, 0.85f);
+                                                    hsv[2] = Math.max(Math.min(hsv[2], 0.45f), 0.18f);
+                                                    color = android.graphics.Color.HSVToColor(hsv);
+                                                }
+                                                
+                                                // Save to Master Cache
+                                                FavoritesDatabase.getInstance(getContext()).saveColor(song.songPath, color);
+                                                Log.d(TAG, "Color cached in background for: " + song.songTitle);
+                                                
+                                                // PROACTIVE SYNC: Force Activity to re-check the database immediately
+                                                if (getActivity() != null) {
+                                                    getActivity().runOnUiThread(() -> {
+                                                        if (getActivity() instanceof MainActivity) {
+                                                            ((MainActivity) getActivity()).updateMiniPlayer();
+                                                        }
+                                                    });
+                                                }
+                                            }
+                                        });
+                            } else {
+                                Log.d(TAG, "Palette skipped, color exists in cache for: " + song.songTitle);
+                            }
+                        } else {
+                            Log.d(TAG, "Final bitmap null, setting default for: " + song.songTitle);
+                            setDefaultProfileImage(imageView);
+                        }
+                    } else {
+                        Log.d(TAG, "Tag mismatch, skipping image set for: " + song.songTitle);
                     }
                 });
+            }
+        });
     }
     private void setDefaultProfileImage(ShapeableImageView profile_imageView) {
         profile_imageView.setImageResource(R.drawable.profile);
@@ -301,6 +470,10 @@ public class PlayList_Fragment extends Fragment {
         profile_imageView.setLayoutParams(params);
     }
 
+    /**
+     * Notifies the parent Activity (MainActivity or LikedSongsActivity) to update its UI components.
+     * Ensures MiniPlayer and RecyclerView selection are always in sync with the current song.
+     */
     private void notifyActivity() {
         if (getActivity() instanceof MainActivity) {
             ((MainActivity) getActivity()).updateMiniPlayer();
@@ -360,6 +533,7 @@ public class PlayList_Fragment extends Fragment {
             mediaPlayer = MediaPlayer.create(getContext(), Uri.parse(currentSong.songPath));
             if (mediaPlayer != null) {
                 playingPosition = position;
+                playingSongPath = currentSong.songPath; // Update currently playing path
                 mediaPlayer.start();
 
                 mediaPlayer.setOnCompletionListener(mp -> {
@@ -387,9 +561,9 @@ public class PlayList_Fragment extends Fragment {
                 updateProfileImage(profile, currentSong);
                 loadSyncedLyrics(currentSong.songPath);
 
-                try (FavoritesDatabase db = new FavoritesDatabase(getContext())) {
+                FavoritesDatabase db = FavoritesDatabase.getInstance(getContext());
                     currentSong.isFavourite = db.isFavorite(currentSong.songPath);
-                }
+
                 if (favButton != null) favButton.setImageResource(currentSong.isFavourite ? R.drawable.fill_heart : R.drawable.boder_of_heart);
 
                 if (seekBar != null) {
@@ -454,7 +628,7 @@ public class PlayList_Fragment extends Fragment {
         currentLyricIndex = -1;
 
         if (getContext() == null) return;
-        try (FavoritesDatabase db = new FavoritesDatabase(getContext())) {
+        FavoritesDatabase db = FavoritesDatabase.getInstance(getContext());
             String[] cached = db.getCachedLyrics(path);
 
             if (cached != null && cached[1] != null && !cached[1].isEmpty() && !cached[1].equalsIgnoreCase("null")) {
@@ -465,7 +639,7 @@ public class PlayList_Fragment extends Fragment {
                     }
                 }
             }
-        }
+
     }
 
     private void updateSyncedLyrics(int currentMs) {
@@ -485,21 +659,21 @@ public class PlayList_Fragment extends Fragment {
                 syncedLyricsTxt.setText(text);
                 
                 // Spotify style slide up animation
-                android.view.animation.Animation slideUp = android.view.animation.AnimationUtils.loadAnimation(getContext(), R.anim.slide_up);
+                Animation slideUp = AnimationUtils.loadAnimation(getContext(), R.anim.slide_up);
                 syncedLyricsTxt.startAnimation(slideUp);
             }
         }
     }
 
-    private java.util.List<LyricLine> parseLRC(String lrc) {
-        java.util.List<LyricLine> lines = new java.util.ArrayList<>();
+    private List<LyricLine> parseLRC(String lrc) {
+        List<LyricLine> lines = new ArrayList<>();
         if (lrc == null) return lines;
 
         String[] split = lrc.split("\n");
-        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("\\[(\\d{2}):(\\d{2})\\.(\\d{2,3})](.*)");
+        Pattern pattern = Pattern.compile("\\[(\\d{2}):(\\d{2})\\.(\\d{2,3})](.*)");
 
         for (String line : split) {
-            java.util.regex.Matcher matcher = pattern.matcher(line);
+            Matcher matcher = pattern.matcher(line);
             if (matcher.find()) {
                 try {
                     long min = Long.parseLong(Objects.requireNonNull(matcher.group(1)));
@@ -515,7 +689,7 @@ public class PlayList_Fragment extends Fragment {
                         lines.add(new LyricLine(time, text));
                     }
                 } catch (Exception e) {
-                    e.printStackTrace();
+                    Log.e(TAG, "Error parsing LRC line: " + e.getMessage());
                 }
             }
         }
@@ -560,6 +734,26 @@ public class PlayList_Fragment extends Fragment {
         return 0;
     }
 
+    /**
+     * Provides physical feedback to the user on button clicks.
+     * Matches the implementation in SyncedLyricsEditorActivity for consistency.
+     * 
+     * @param ms The duration of the vibration in milliseconds.
+     * Uses: Native Vibrator service, Version-specific vibration effects.
+     * Disuses: Generic haptic constants for more precise control.
+     */
+    private void vibrate(long ms) {
+        if (getContext() == null) return;
+        Vibrator v = (Vibrator) getContext().getSystemService(Context.VIBRATOR_SERVICE);
+        if (v != null) {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                v.vibrate(VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE));
+            } else {
+                v.vibrate(ms);
+            }
+        }
+    }
+
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         // Inflate the layout for this fragment
@@ -601,6 +795,9 @@ public class PlayList_Fragment extends Fragment {
         }
 
         pause.setOnClickListener(v -> {
+            // Provide vibration feedback on click (Consistent with Lyrics Editor style)
+            vibrate(40);
+
             if (mediaPlayer != null) {
                 if (mediaPlayer.isPlaying()) {
                     pause.setImageResource(R.drawable.play);
@@ -614,8 +811,15 @@ public class PlayList_Fragment extends Fragment {
             }
         });
 
-        next.setOnClickListener(v -> playNext());
-        previous.setOnClickListener(v -> playPrevious());
+        next.setOnClickListener(v -> {
+            vibrate(25);
+            playNext();
+        });
+        
+        previous.setOnClickListener(v -> {
+            vibrate(25);
+            playPrevious();
+        });
 
         seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
@@ -630,12 +834,16 @@ public class PlayList_Fragment extends Fragment {
         });
 
         loopButton.setOnClickListener(v -> {
+            vibrate(25);
             currentLoopMode = (currentLoopMode + 1) % 4;
             saveLoopMode(currentLoopMode); // Save to SharedPreferences
             applyLoopMode(true);
         });
 
-        favButton.setOnClickListener(v -> toggleFavourite());
+        favButton.setOnClickListener(v -> {
+            vibrate(25);
+            toggleFavourite();
+        });
 
         favButton.setOnLongClickListener(v -> {
             Intent intent = new Intent(getContext(), LikedSongsActivity.class);
@@ -645,7 +853,10 @@ public class PlayList_Fragment extends Fragment {
 
         logo.setOnClickListener(v -> {
             long clickTime = System.currentTimeMillis();
-            if (clickTime - lastClickTime < 300) toggleFavourite();
+            if (clickTime - lastClickTime < 300) {
+                vibrate(25);
+                toggleFavourite();
+            }
             lastClickTime = clickTime;
         });
 
