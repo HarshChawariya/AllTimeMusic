@@ -45,15 +45,15 @@
 
 | Music Library | Now Playing |
 |:--:|:--:|
-| ![Music Library](screenshots/music-library.jpg) | ![Now Playing](screenshots/now-playing.jpg) |
+| ![Music Library](music-library.jpg) | ![Now Playing](now-playing.jpg) |
 
 | Lyrics View | Lyrics Options |
 |:--:|:--:|
-| ![Lyrics View](screenshots/lyrics-view.jpg) | ![Lyrics Options Menu](screenshots/lyrics-options-menu.jpg) |
+| ![Lyrics View](lyrics-view.jpg) | ![Lyrics Options Menu](lyrics-options-menu.jpg) |
 
 | Synced Lyrics Editor |
 |:--:|
-| ![Synced Lyrics Editor](screenshots/synced-lyrics-editor.jpg) |
+| ![Synced Lyrics Editor](synced-lyrics-editor.jpg) |
 
 ## Author
 
