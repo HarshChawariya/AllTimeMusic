@@ -43,7 +43,17 @@
 
 ## Screenshots
 
-App screenshots can be added here as the project’s screenshot assets are added to the repository.
+| Music Library | Now Playing |
+|:--:|:--:|
+| ![Music Library](screenshots/music-library.jpg) | ![Now Playing](screenshots/now-playing.jpg) |
+
+| Lyrics View | Lyrics Options |
+|:--:|:--:|
+| ![Lyrics View](screenshots/lyrics-view.jpg) | ![Lyrics Options Menu](screenshots/lyrics-options-menu.jpg) |
+
+| Synced Lyrics Editor |
+|:--:|
+| ![Synced Lyrics Editor](screenshots/synced-lyrics-editor.jpg) |
 
 ## Author
 
