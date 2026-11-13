@@ -21,6 +21,7 @@
 - Lottie for animations
 - OkHttp
 - Amplituda for waveform-related functionality
+- SQLite for database
 
 ## Getting started
 
